@@ -1,0 +1,29 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/packages/
+/node_modules/
+
+# project output
+/bin/
+/obj/
+
+# local user settings
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# ReSharper
+_ReSharper*/
+*.[Rr]e[Ss]harper
+*.DotSettings.user
+
+# Rider
+.idea/
+
+# Visual Studio 2015 cache/options
+.vs/
+
+# Visual Studio Code
+.vscode/
