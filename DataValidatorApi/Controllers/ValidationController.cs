@@ -16,7 +16,7 @@ using System.Text.Json;
 namespace DataValidatorApi.Controllers
 {
     /// <summary>
-    /// Controlador para la validación de documentos usando Google Gemini AI y OpenAI Vision.
+    /// Controlador inteligente para la validación de documentos que detecta automáticamente el proveedor de IA disponible.
     /// </summary>
     [ApiController]
     [Route("api/[controller]")]
@@ -31,175 +31,221 @@ namespace DataValidatorApi.Controllers
         }
 
         /// <summary>
-        /// Analiza el contenido de un archivo PDF usando el modelo Gemini Pro Vision de Google.
+        /// Valida cruzadamente un documento PDF comparando datos extraídos por IA con datos proporcionados.
+        /// Detecta automáticamente el proveedor de IA disponible.
         /// </summary>
-        /// <remarks>
-        /// Sube un archivo PDF y una pregunta o prompt en lenguaje natural.
-        /// La API convertirá la primera página del PDF en una imagen y la enviará a Gemini
-        /// junto con tu pregunta en una única petición multimodal.
-        /// **Importante:** Se requiere una clave de API de Google. La aplicación la buscará
-        /// en la variable de entorno `GOOGLE_API_KEY`.
-        ///
-        /// **Nota sobre la implementación:** La imagen se guarda en un archivo temporal en disco antes de ser enviada.
-        /// Esto se debe a dificultades para determinar la API correcta para el envío de datos en memoria con el SDK actual.
-        /// Es una solución funcional pero podría mejorarse en el futuro.
-        ///
-        /// Ejemplo de prompt:
-        ///
-        ///     "¿Este documento es un certificado de finalización para el curso de .NET? ¿A nombre de quién está?"
-        ///
-        /// </remarks>
-        /// <param name="file">El archivo PDF a validar.</param>
-        /// <param name="schema">La pregunta o prompt en lenguaje natural para la IA de Google.</param>
-        /// <returns>La respuesta de texto generada por el modelo de IA.</returns>
-        /// <response code="200">Devuelve la respuesta de la IA.</response>
-        /// <response code="400">Si el archivo, el prompt o la clave de API no se proporcionan.</response>
+        /// <param name="request">Solicitud de validación cruzada que incluye el archivo, datos JSON y configuración.</param>
+        /// <returns>Resultado detallado de la validación cruzada.</returns>
+        /// <response code="200">Devuelve el resultado de la validación cruzada.</response>
+        /// <response code="400">Si la solicitud es inválida o faltan datos requeridos.</response>
         /// <response code="500">Si ocurre un error interno durante el procesamiento.</response>
-        [HttpPost("validate-gemini")]
-        public async Task<IActionResult> Validate(IFormFile file, [FromForm] string schema)
+        [HttpPost("cross-validate")]
+        public async Task<IActionResult> CrossValidate([FromForm] CrossValidationRequest request)
         {
-            if (file == null || file.Length == 0)
+            // Validaciones básicas
+            if (request.File == null || request.File.Length == 0)
             {
                 return BadRequest("File is not provided or empty.");
             }
 
-            if (string.IsNullOrEmpty(schema))
+            if (string.IsNullOrEmpty(request.JsonData))
             {
-                return BadRequest("Prompt (schema) is not provided.");
+                return BadRequest("JSON data is not provided.");
             }
 
-            var apiKey = Environment.GetEnvironmentVariable("GOOGLE_API_KEY");
-            if (string.IsNullOrEmpty(apiKey))
+            if (request.File.ContentType != "application/pdf")
             {
-                return BadRequest("Google API Key is not configured. Please set the GOOGLE_API_KEY environment variable.");
+                return BadRequest("Invalid file type. Only PDF is supported.");
             }
 
-            if (file.ContentType != "application/pdf")
-            {
-                return BadRequest("Invalid file type. Only PDF is supported for now.");
-            }
-
-            string? tempFilePath = null;
             try
             {
-                // 1. Convert PDF page to an in-memory image using IronPDF
-                tempFilePath = await ConvertPdfToImage(file);
+                // Detectar automáticamente el proveedor disponible
+                var availableProvider = await DetectAvailableProvider();
+                if (string.IsNullOrEmpty(availableProvider))
+                {
+                    return StatusCode(500, "No AI provider is available. Please configure OPENAI_API_KEY or GOOGLE_API_KEY environment variables.");
+                }
 
-                // 2. Call Google Gemini AI
-                var googleAI = new GoogleAi(apiKey);
-                var generativeModel = googleAI.CreateGenerativeModel("gemini-1.5-flash-latest");
-
-                var request = new GenerateContentRequest();
-                request.AddText(schema);
-                request.AddInlineFile(tempFilePath);
-
-                var response = await generativeModel.GenerateContentAsync(request);
-
-                return Ok(new {
-                    FileName = file.FileName,
-                    Prompt = schema,
-                    Provider = "Google Gemini",
-                    AI_Response = response.Text()
-                });
+                return availableProvider switch
+                {
+                    "openai" => await CrossValidateOpenAI(request),
+                    "gemini" => await CrossValidateGemini(request),
+                    _ => StatusCode(500, "Unable to determine available AI provider.")
+                };
             }
             catch (Exception ex)
             {
-                return StatusCode(500, $"An error occurred while processing the file: {ex.Message}");
-            }
-            finally
-            {
-                if (tempFilePath != null && System.IO.File.Exists(tempFilePath))
-                {
-                    System.IO.File.Delete(tempFilePath);
-                }
+                return StatusCode(500, $"An error occurred during cross-validation: {ex.Message}");
             }
         }
 
         /// <summary>
-        /// Analiza el contenido de un archivo PDF usando OpenAI Vision (GPT-4 Vision).
+        /// Detecta qué proveedor de IA está disponible y funcional
         /// </summary>
-        /// <remarks>
-        /// Sube un archivo PDF y una pregunta o prompt en lenguaje natural.
-        /// La API convertirá la primera página del PDF en una imagen y la enviará a OpenAI Vision
-        /// junto con tu pregunta en una única petición multimodal.
-        /// **Importante:** Se requiere una clave de API de OpenAI. La aplicación la buscará
-        /// en la variable de entorno `OPENAI_API_KEY`.
-        ///
-        /// Ejemplo de prompt:
-        ///
-        ///     "¿Este documento es un certificado de finalización para el curso de .NET? ¿A nombre de quién está?"
-        ///
-        /// </remarks>
-        /// <param name="file">El archivo PDF a validar.</param>
-        /// <param name="schema">La pregunta o prompt en lenguaje natural para OpenAI.</param>
-        /// <returns>La respuesta de texto generada por el modelo de IA.</returns>
-        /// <response code="200">Devuelve la respuesta de la IA.</response>
-        /// <response code="400">Si el archivo, el prompt o la clave de API no se proporcionan.</response>
-        /// <response code="500">Si ocurre un error interno durante el procesamiento.</response>
-        [HttpPost("validate-openai")]
-        public async Task<IActionResult> ValidateWithOpenAI(IFormFile file, [FromForm] string schema)
+        /// <returns>El nombre del proveedor disponible o null si ninguno está disponible</returns>
+        private async Task<string?> DetectAvailableProvider()
         {
-            if (file == null || file.Length == 0)
+            // Verificar OpenAI primero (generalmente más rápido)
+            if (await IsOpenAIAvailable())
             {
-                return BadRequest("File is not provided or empty.");
+                return "openai";
             }
 
-            if (string.IsNullOrEmpty(schema))
+            // Verificar Gemini como alternativa
+            if (await IsGeminiAvailable())
             {
-                return BadRequest("Prompt (schema) is not provided.");
+                return "gemini";
             }
 
-            var apiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY");
-            if (string.IsNullOrEmpty(apiKey))
-            {
-                return BadRequest("OpenAI API Key is not configured. Please set the OPENAI_API_KEY environment variable.");
-            }
+            return null;
+        }
 
-            if (file.ContentType != "application/pdf")
-            {
-                return BadRequest("Invalid file type. Only PDF is supported for now.");
-            }
-
-            string? tempFilePath = null;
+        /// <summary>
+        /// Verifica si OpenAI está disponible
+        /// </summary>
+        private async Task<bool> IsOpenAIAvailable()
+        {
             try
             {
-                // 1. Convert PDF page to an in-memory image using IronPDF
-                tempFilePath = await ConvertPdfToImage(file);
+                var apiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY");
+                if (string.IsNullOrEmpty(apiKey))
+                {
+                    return false;
+                }
 
-                // 2. Call OpenAI Vision API
+                // Hacer una prueba rápida con OpenAI
                 var openAiClient = new OpenAIClient(apiKey);
                 var chatClient = openAiClient.GetChatClient("gpt-4o");
                 
-                // Convert image to base64
-                var imageBytes = await System.IO.File.ReadAllBytesAsync(tempFilePath);
-                var base64Image = Convert.ToBase64String(imageBytes);
-                var imageUrl = $"data:image/png;base64,{base64Image}";
-
-                var messages = new List<ChatMessage>
+                var testMessages = new List<ChatMessage>
                 {
-                    new UserChatMessage(
-                        ChatMessageContentPart.CreateTextPart(schema),
-                        ChatMessageContentPart.CreateImagePart(BinaryData.FromBytes(imageBytes), "image/png")
-                    )
+                    new UserChatMessage("Test")
                 };
 
-                var chatCompletionOptions = new ChatCompletionOptions
+                var testOptions = new ChatCompletionOptions
                 {
-                    MaxOutputTokenCount = 1000
+                    MaxOutputTokenCount = 1
                 };
 
-                var response = await chatClient.CompleteChatAsync(messages, chatCompletionOptions);
+                await chatClient.CompleteChatAsync(testMessages, testOptions);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Verifica si Gemini está disponible
+        /// </summary>
+        private async Task<bool> IsGeminiAvailable()
+        {
+            try
+            {
+                var apiKey = Environment.GetEnvironmentVariable("GOOGLE_API_KEY");
+                if (string.IsNullOrEmpty(apiKey))
+                {
+                    return false;
+                }
+
+                // Hacer una prueba rápida con Gemini
+                var model = new GenerativeModel(apiKey, "gemini-1.5-flash-latest");
+                var content = new Content();
+                content.AddText("Test");
+                
+                var request = new GenerateContentRequest();
+                request.Contents.Add(content);
+                
+                await model.GenerateContentAsync(request);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Endpoint inteligente que analiza documentos PDF detectando automáticamente el proveedor de IA disponible.
+        /// </summary>
+        /// <remarks>
+        /// Sube un archivo PDF y una pregunta o prompt en lenguaje natural.
+        /// La API detectará automáticamente qué proveedor de IA está disponible (OpenAI o Google Gemini)
+        /// y utilizará el que esté funcional para procesar tu solicitud.
+        /// 
+        /// **Detección automática:** El sistema verifica primero OpenAI y luego Gemini.
+        /// **Variables de entorno requeridas:** `OPENAI_API_KEY` y/o `GOOGLE_API_KEY`.
+        ///
+        /// Ejemplo de prompt:
+        ///
+        ///     "¿Este documento es un certificado de finalización para el curso de .NET? ¿A nombre de quién está?"
+        ///
+        /// </remarks>
+        /// <param name="file">El archivo PDF a validar.</param>
+        /// <param name="schema">La pregunta o prompt en lenguaje natural para la IA.</param>
+        /// <returns>La respuesta de texto generada por el modelo de IA disponible.</returns>
+        /// <response code="200">Devuelve la respuesta de la IA con información del proveedor utilizado.</response>
+        /// <response code="400">Si el archivo o el prompt no se proporcionan, o si no hay proveedores disponibles.</response>
+        /// <response code="500">Si ocurre un error interno durante el procesamiento.</response>
+        [HttpPost("validate")]
+        public async Task<IActionResult> ValidateIntelligent(IFormFile file, [FromForm] string schema)
+        {
+            if (file == null || file.Length == 0)
+            {
+                return BadRequest("File is not provided or empty.");
+            }
+
+            if (string.IsNullOrEmpty(schema))
+            {
+                return BadRequest("Prompt (schema) is not provided.");
+            }
+
+            if (file.ContentType != "application/pdf")
+            {
+                return BadRequest("Invalid file type. Only PDF is supported for now.");
+            }
+
+            // Detectar proveedor disponible
+            var availableProvider = await DetectAvailableProvider();
+            if (string.IsNullOrEmpty(availableProvider))
+            {
+                return BadRequest("No AI providers are available. Please configure OPENAI_API_KEY or GOOGLE_API_KEY environment variables.");
+            }
+
+            string? tempFilePath = null;
+            try
+            {
+                // 1. Convert PDF page to an image
+                tempFilePath = await ConvertPdfToImage(file);
+
+                // 2. Call the available AI provider
+                string aiResponse;
+                string providerName;
+                
+                if (availableProvider == "openai")
+                {
+                    aiResponse = await ProcessWithOpenAI(tempFilePath, schema);
+                    providerName = "OpenAI Vision";
+                }
+                else
+                {
+                    aiResponse = await ProcessWithGemini(tempFilePath, schema);
+                    providerName = "Google Gemini";
+                }
 
                 return Ok(new {
                     FileName = file.FileName,
                     Prompt = schema,
-                    Provider = "OpenAI Vision",
-                    AI_Response = response.Value.Content[0].Text
+                    Provider = providerName,
+                    AI_Response = aiResponse,
+                    AutoDetected = true
                 });
             }
             catch (Exception ex)
             {
-                return StatusCode(500, $"An error occurred while processing the file: {ex.Message}");
+                return StatusCode(500, $"An error occurred while processing the file with {availableProvider}: {ex.Message}");
             }
             finally
             {
@@ -211,23 +257,54 @@ namespace DataValidatorApi.Controllers
         }
 
         /// <summary>
-        /// Endpoint unificado que permite elegir el proveedor de IA (Google Gemini u OpenAI Vision).
+        /// Procesa una imagen con OpenAI Vision
         /// </summary>
-        /// <param name="file">El archivo PDF a validar.</param>
-        /// <param name="schema">La pregunta o prompt en lenguaje natural.</param>
-        /// <param name="provider">El proveedor de IA a usar: 'gemini' o 'openai'. Por defecto es 'gemini'.</param>
-        /// <returns>La respuesta de texto generada por el modelo de IA seleccionado.</returns>
-        [HttpPost("validate")]
-        public async Task<IActionResult> ValidateUnified(IFormFile file, [FromForm] string schema, [FromForm] string provider = "gemini")
+        /// <param name="imagePath">Ruta de la imagen temporal</param>
+        /// <param name="prompt">Prompt para la IA</param>
+        /// <returns>Respuesta de OpenAI</returns>
+        private async Task<string> ProcessWithOpenAI(string imagePath, string prompt)
         {
-            provider = provider?.ToLowerInvariant() ?? "gemini";
+            var apiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY");
+            var openAiClient = new OpenAIClient(apiKey!);
+            var chatClient = openAiClient.GetChatClient("gpt-4o");
             
-            return provider switch
+            var imageBytes = await System.IO.File.ReadAllBytesAsync(imagePath);
+
+            var messages = new List<ChatMessage>
             {
-                "openai" => await ValidateWithOpenAI(file, schema),
-                "gemini" => await Validate(file, schema),
-                _ => BadRequest("Invalid provider. Use 'gemini' or 'openai'.")
+                new UserChatMessage(
+                    ChatMessageContentPart.CreateTextPart(prompt),
+                    ChatMessageContentPart.CreateImagePart(BinaryData.FromBytes(imageBytes), "image/png")
+                )
             };
+
+            var chatCompletionOptions = new ChatCompletionOptions
+            {
+                MaxOutputTokenCount = 1000
+            };
+
+            var response = await chatClient.CompleteChatAsync(messages, chatCompletionOptions);
+            return response.Value.Content[0].Text;
+        }
+
+        /// <summary>
+        /// Procesa una imagen con Google Gemini
+        /// </summary>
+        /// <param name="imagePath">Ruta de la imagen temporal</param>
+        /// <param name="prompt">Prompt para la IA</param>
+        /// <returns>Respuesta de Gemini</returns>
+        private async Task<string> ProcessWithGemini(string imagePath, string prompt)
+        {
+            var apiKey = Environment.GetEnvironmentVariable("GOOGLE_API_KEY");
+            var googleAI = new GoogleAi(apiKey!);
+            var generativeModel = googleAI.CreateGenerativeModel("gemini-1.5-flash-latest");
+
+            var request = new GenerateContentRequest();
+            request.AddText(prompt);
+            request.AddInlineFile(imagePath);
+
+            var response = await generativeModel.GenerateContentAsync(request);
+            return response.Text();
         }
 
         /// <summary>
@@ -260,79 +337,16 @@ namespace DataValidatorApi.Controllers
             return tempFilePath;
         }
 
-        /// <summary>
-        /// Valida datos JSON contra el contenido de un PDF o imagen usando IA
-        /// </summary>
-        /// <param name="request">Solicitud de validación cruzada</param>
-        /// <returns>Resultado de validación con detalles</returns>
-        [HttpPost("cross-validate")]
-        public async Task<IActionResult> CrossValidate([FromForm] CrossValidationRequest request)
-        {
-            try
-            {
-                // 1. Validar entrada
-                if (!ModelState.IsValid)
-                {
-                    return BadRequest(ModelState);
-                }
 
-                if (request.File == null || request.File.Length == 0)
-                {
-                    return BadRequest(new { Error = "No se proporcionó ningún archivo." });
-                }
-
-                if (string.IsNullOrWhiteSpace(request.JsonData))
-                {
-                    return BadRequest(new { Error = "No se proporcionaron datos JSON para validar." });
-                }
-
-                // 2. Validar JSON
-                JsonElement providedData;
-                try
-                {
-                    providedData = JsonSerializer.Deserialize<JsonElement>(request.JsonData);
-                }
-                catch (JsonException)
-                {
-                    return BadRequest(new { Error = "Los datos JSON proporcionados no son válidos." });
-                }
-
-                // 3. Convertir archivo a imagen
-                string tempFilePath = await ConvertPdfToImage(request.File);
-
-                // 4. Extraer información usando IA
-                var extractedInfo = await ExtractInformationFromImage(tempFilePath, request.Provider, request.DocumentType);
-
-                // 5. Comparar datos
-                var validationResult = await CompareDataWithAI(extractedInfo, request.JsonData, request.Provider, request.FieldsToValidate);
-
-                // 6. Limpiar archivo temporal
-                if (System.IO.File.Exists(tempFilePath))
-                {
-                    System.IO.File.Delete(tempFilePath);
-                }
-
-                return Ok(validationResult);
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new { Error = $"Error interno del servidor: {ex.Message}" });
-            }
-        }
 
         /// <summary>
         /// Valida datos JSON contra PDF/imagen usando Gemini específicamente
         /// </summary>
         [HttpPost("cross-validate-gemini")]
-        public async Task<IActionResult> CrossValidateGemini([FromForm] IFormFile file, [FromForm] string jsonData, [FromForm] string? documentType = null)
+        [Consumes("multipart/form-data")]
+        public async Task<IActionResult> CrossValidateGemini([FromForm] CrossValidationRequest request)
         {
-            var request = new CrossValidationRequest
-            {
-                File = file,
-                JsonData = jsonData,
-                Provider = "gemini",
-                DocumentType = documentType
-            };
+            request.Provider = "gemini";
             return await CrossValidate(request);
         }
 
@@ -340,15 +354,10 @@ namespace DataValidatorApi.Controllers
         /// Valida datos JSON contra PDF/imagen usando OpenAI específicamente
         /// </summary>
         [HttpPost("cross-validate-openai")]
-        public async Task<IActionResult> CrossValidateOpenAI([FromForm] IFormFile file, [FromForm] string jsonData, [FromForm] string? documentType = null)
+        [Consumes("multipart/form-data")]
+        public async Task<IActionResult> CrossValidateOpenAI([FromForm] CrossValidationRequest request)
         {
-            var request = new CrossValidationRequest
-            {
-                File = file,
-                JsonData = jsonData,
-                Provider = "openai",
-                DocumentType = documentType
-            };
+            request.Provider = "openai";
             return await CrossValidate(request);
          }
 
@@ -458,7 +467,7 @@ namespace DataValidatorApi.Controllers
                  MaxOutputTokenCount = 1500
              };
 
-             Console.WriteLine("[DEBUG] Enviando solicitud de extracción a OpenAI");
+             Console.WriteLine("[DEBUG] Enviando solicitud extracción a OpenAI");
              var response = await chatClient.CompleteChatAsync(messages, chatCompletionOptions);
              Console.WriteLine("[DEBUG] Respuesta de extracción recibida de OpenAI");
              return response.Value.Content[0].Text;
