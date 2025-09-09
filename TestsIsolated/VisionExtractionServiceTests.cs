@@ -33,8 +33,7 @@ namespace DataValidator.Tests
 
             var config = new AIModelsConfiguration
             {
-                VisionModel = new AIModelConfig { Provider = "Primary" },
-                AlternativeVisionModel = new AIModelConfig { Provider = "Alternative" }
+                VisionModel = new AIModelConfig { Provider = "Primary" }
             };
             _mockAiConfig.Setup(x => x.Value).Returns(config);
 

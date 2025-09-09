@@ -43,16 +43,6 @@ namespace DataValidator.API.Services
 
             var result = await primaryProvider.AnalyzeDataAsync(finalPrompt);
 
-            if (!result.Success)
-            {
-                _logger.LogWarning("Primary analysis provider failed. Trying alternative.");
-                var alternativeProvider = _analysisProviders.FirstOrDefault(p => p.ProviderName == _aiConfig.AlternativeAnalysisModel.Provider);
-                if (alternativeProvider != null && alternativeProvider != primaryProvider)
-                {
-                    result = await alternativeProvider.AnalyzeDataAsync(finalPrompt);
-                }
-            }
-
             if (result.Success)
             {
                 var parsedResult = ParseAnalysisResponse(result.Analysis);

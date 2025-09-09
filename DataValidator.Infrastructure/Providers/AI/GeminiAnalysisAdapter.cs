@@ -1,6 +1,7 @@
 using DataValidator.Domain.Models;
 using DataValidator.Domain.Ports;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
@@ -12,11 +13,13 @@ namespace DataValidator.Infrastructure.Providers.AI
     {
         private readonly HttpClient _httpClient;
         private readonly ILogger<GeminiAnalysisAdapter> _logger;
+        private readonly AIModelsConfiguration _aiConfig;
 
-        public GeminiAnalysisAdapter(HttpClient httpClient, ILogger<GeminiAnalysisAdapter> logger)
+        public GeminiAnalysisAdapter(HttpClient httpClient, ILogger<GeminiAnalysisAdapter> logger, IOptions<AIModelsConfiguration> aiConfig)
         {
             _httpClient = httpClient;
             _logger = logger;
+            _aiConfig = aiConfig.Value;
         }
 
         public string ProviderName => "Google";
@@ -40,10 +43,12 @@ namespace DataValidator.Infrastructure.Providers.AI
             var json = JsonSerializer.Serialize(requestBody);
             var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-            // The API key and model name should be injected via config
-            var model = "gemini-pro";
-            var apiKey = "YOUR_API_KEY";
-            var url = $"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={apiKey}";
+            // Get configuration from appsettings
+            var config = _aiConfig.AnalysisModel;
+            var model = config.Model;
+            var apiKey = config.ApiKey;
+            var baseUrl = config.BaseUrl;
+            var url = $"{baseUrl}/models/{model}:generateContent?key={apiKey}";
 
             var response = await _httpClient.PostAsync(url, content);
             var responseContent = await response.Content.ReadAsStringAsync();
@@ -57,7 +62,7 @@ namespace DataValidator.Infrastructure.Providers.AI
                 {
                     Success = true,
                     Analysis = analysisText,
-                    ModelUsed = model,
+                    ModelUsed = config.Model,
                     Provider = ProviderName
                 };
             }
@@ -68,7 +73,7 @@ namespace DataValidator.Infrastructure.Providers.AI
                 {
                     Success = false,
                     ErrorMessage = $"Gemini API error: {response.StatusCode}",
-                    ModelUsed = model,
+                    ModelUsed = config.Model,
                     Provider = ProviderName
                 };
             }

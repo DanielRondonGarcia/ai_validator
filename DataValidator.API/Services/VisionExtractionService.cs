@@ -48,16 +48,6 @@ namespace DataValidator.API.Services
 
             var result = await primaryProvider.ExtractDataFromImageAsync(imageData, mimeType, extractionPrompt);
 
-            if (!result.Success)
-            {
-                _logger.LogWarning("Primary vision provider failed. Trying alternative.");
-                var alternativeProvider = _visionProviders.FirstOrDefault(p => p.ProviderName == _aiConfig.AlternativeVisionModel.Provider);
-                if (alternativeProvider != null && alternativeProvider != primaryProvider)
-                {
-                    result = await alternativeProvider.ExtractDataFromImageAsync(imageData, mimeType, extractionPrompt);
-                }
-            }
-
             stopwatch.Stop();
             result.ProcessingTime = stopwatch.Elapsed;
             _logger.LogInformation("Vision extraction completed in {ProcessingTime}ms. Success: {Success}", result.ProcessingTime.TotalMilliseconds, result.Success);

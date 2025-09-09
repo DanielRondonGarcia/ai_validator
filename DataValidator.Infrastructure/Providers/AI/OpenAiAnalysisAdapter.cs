@@ -1,6 +1,7 @@
 using DataValidator.Domain.Models;
 using DataValidator.Domain.Ports;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
@@ -12,20 +13,25 @@ namespace DataValidator.Infrastructure.Providers.AI
     {
         private readonly HttpClient _httpClient;
         private readonly ILogger<OpenAiAnalysisAdapter> _logger;
+        private readonly AIModelsConfiguration _aiConfig;
 
-        public OpenAiAnalysisAdapter(HttpClient httpClient, ILogger<OpenAiAnalysisAdapter> logger)
+        public OpenAiAnalysisAdapter(HttpClient httpClient, ILogger<OpenAiAnalysisAdapter> logger, IOptions<AIModelsConfiguration> aiConfig)
         {
             _httpClient = httpClient;
             _logger = logger;
+            _aiConfig = aiConfig.Value;
         }
 
         public string ProviderName => "OpenAI";
 
         public async Task<ValidationAnalysisResult> AnalyzeDataAsync(string prompt)
         {
+            // Get configuration from appsettings
+            var config = _aiConfig.AnalysisModel;
+            
             var requestBody = new
             {
-                model = "gpt-4-turbo-preview", // This should come from config
+                model = config.Model,
                 messages = new[]
                 {
                     new
@@ -39,16 +45,18 @@ namespace DataValidator.Infrastructure.Providers.AI
                         content = prompt
                     }
                 },
-                max_tokens = 4096, // This should come from config
-                temperature = 0.2, // This should come from config
+                max_tokens = config.MaxTokens,
+                temperature = config.Temperature,
                 response_format = new { type = "json_object" }
             };
 
             var json = JsonSerializer.Serialize(requestBody);
             var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-            // API key should be handled by HttpClientFactory
-            var response = await _httpClient.PostAsync("https://api.openai.com/v1/chat/completions", content);
+            // Set authorization header with API key from configuration
+            _httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", config.ApiKey);
+            
+            var response = await _httpClient.PostAsync($"{config.BaseUrl}/chat/completions", content);
             var responseContent = await response.Content.ReadAsStringAsync();
 
             if (response.IsSuccessStatusCode)
@@ -60,7 +68,7 @@ namespace DataValidator.Infrastructure.Providers.AI
                 {
                     Success = true,
                     Analysis = analysisText,
-                    ModelUsed = "gpt-4-turbo-preview",
+                    ModelUsed = config.Model,
                     Provider = ProviderName
                 };
             }
@@ -71,7 +79,7 @@ namespace DataValidator.Infrastructure.Providers.AI
                 {
                     Success = false,
                     ErrorMessage = $"OpenAI API error: {response.StatusCode}",
-                    ModelUsed = "gpt-4-turbo-preview",
+                    ModelUsed = config.Model,
                     Provider = ProviderName
                 };
             }

@@ -4,8 +4,6 @@ namespace DataValidator.Domain.Models
     {
         public AIModelConfig VisionModel { get; set; } = new();
         public AIModelConfig AnalysisModel { get; set; } = new();
-        public AIModelConfig AlternativeVisionModel { get; set; } = new();
-        public AIModelConfig AlternativeAnalysisModel { get; set; } = new();
     }
 
     public class AIModelConfig

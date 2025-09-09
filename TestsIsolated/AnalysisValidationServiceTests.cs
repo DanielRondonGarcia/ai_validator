@@ -31,8 +31,7 @@ namespace DataValidator.Tests
             // Setup default config
             var config = new AIModelsConfiguration
             {
-                AnalysisModel = new AIModelConfig { Provider = "Primary" },
-                AlternativeAnalysisModel = new AIModelConfig { Provider = "Alternative" }
+                AnalysisModel = new AIModelConfig { Provider = "Primary" }
             };
             _mockAiConfig.Setup(x => x.Value).Returns(config);
 
