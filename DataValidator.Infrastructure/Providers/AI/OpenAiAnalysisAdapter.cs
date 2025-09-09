@@ -37,7 +37,7 @@ namespace DataValidator.Infrastructure.Providers.AI
                     new
                     {
                         role = "system",
-                        content = "You are an expert data validation analyst. Analyze the provided data carefully and provide detailed, accurate validation results in the specified JSON format."
+                        content = $"You are an expert data validation analyst with extensive experience in document processing and data verification. Current date: {DateTime.Now:yyyy-MM-dd HH:mm:ss UTC}. \n\nYour responsibilities:\n- Analyze provided data with meticulous attention to detail\n- Identify inconsistencies, errors, or missing information\n- Validate data formats, ranges, and business logic\n- Consider temporal context when evaluating date-sensitive information\n- Provide comprehensive validation results in the specified JSON format\n- Flag any anomalies or suspicious patterns\n\nAlways maintain objectivity and provide clear reasoning for your validation decisions."
                     },
                     new
                     {

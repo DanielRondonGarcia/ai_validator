@@ -6,6 +6,96 @@ Esta es una API RESTful construida con .NET 8 y C# que utiliza inteligencia arti
 
 ### ¿Qué es la Arquitectura Hexagonal?
 
+La **Arquitectura Hexagonal** (también conocida como "Ports and Adapters") es un patrón de diseño que separa la lógica de negocio del mundo exterior.
+
+### 🏠 Explicación Simple
+
+Imagina que tu aplicación es como construir una casa con habitaciones bien definidas:
+
+- **Centro de la casa** = Tu lógica de negocio (Domain)
+- **Puertas y ventanas** = Ports (interfaces)
+- **Llaves, manijas, marcos** = Adapters (implementaciones)
+
+### 📁 En Este Proyecto
+
+#### 🔵 **DOMAIN** (Centro - Lógica de Negocio)
+`DataValidator.Domain/`
+
+**Ports (Interfaces - "Las Puertas"):**
+- `IAiVisionProvider.cs` - "Puerta para IA de visión"
+- `IAiAnalysisProvider.cs` - "Puerta para IA de análisis"
+- `IPdfProcessor.cs` - "Puerta para procesar PDFs"
+
+**Models (Objetos de Negocio):**
+- `VisionExtractionResult.cs`
+- `ValidationAnalysisResult.cs`
+
+#### 🔧 **INFRASTRUCTURE** (Adapters - "Las Llaves")
+`DataValidator.Infrastructure/`
+
+**Adapters (Implementaciones - "Las Llaves que Abren las Puertas"):**
+- `OpenAiVisionAdapter.cs` - Implementa `IAiVisionProvider`
+- `GeminiVisionAdapter.cs` - Implementa `IAiVisionProvider`
+- `OpenAiAnalysisAdapter.cs` - Implementa `IAiAnalysisProvider`
+- `PdfProcessorAdapter.cs` - Implementa `IPdfProcessor`
+
+#### 🌐 **API** (Entrada - "La Fachada")
+`DataValidator.API/`
+
+**Controllers y Services:**
+- `ValidationController.cs` - Punto de entrada HTTP
+- `VisionExtractionService.cs` - Orquesta el flujo
+
+### 🔄 Cómo Funciona (Flujo Simple)
+
+```
+1. HTTP Request → ValidationController
+2. Controller → VisionExtractionService
+3. Service → IAiVisionProvider (PORT)
+4. PORT → OpenAiVisionAdapter (ADAPTER)
+5. Adapter → OpenAI API
+6. Respuesta regresa por el mismo camino
+```
+
+### 🎯 Ventajas Clave
+
+1. **Intercambiable**: Puedes cambiar de OpenAI a Gemini sin tocar el centro
+2. **Testeable**: Puedes crear adapters falsos para pruebas
+3. **Independiente**: El dominio no sabe si usa OpenAI, Gemini o cualquier otra IA
+4. **Mantenible**: Cambios externos no afectan la lógica de negocio
+
+### 🔧 Ejemplo Práctico
+
+Si quieres agregar **Claude AI**:
+1. **NO tocas** el Domain (ports siguen igual)
+2. **Creas** `ClaudeVisionAdapter.cs` en Infrastructure
+3. **Implementas** `IAiVisionProvider`
+4. **Registras** en `Program.cs`
+
+¡El resto del código sigue funcionando sin cambios!
+
+### 📝 Resumen Visual
+
+```
+┌─────────────────┐
+│   API Layer    │ ← Entrada (HTTP)
+└─────────────────┘
+         ↓
+┌─────────────────┐
+│  Domain Layer   │ ← Lógica + Ports (interfaces)
+└─────────────────┘
+         ↓
+┌─────────────────┐
+│Infrastructure   │ ← Adapters (implementaciones)
+└─────────────────┘
+         ↓
+┌─────────────────┐
+│ External APIs   │ ← OpenAI, Gemini, etc.
+└─────────────────┘
+```
+
+La arquitectura hexagonal te permite **cambiar las ruedas sin parar el motor** 🚗
+
 La **Arquitectura Hexagonal**, también conocida como **Puertos y Adaptadores**, es un patrón arquitectónico que busca aislar la lógica de negocio de las dependencias externas (bases de datos, APIs, frameworks, etc.). El "hexágono" representa el núcleo de la aplicación, mientras que los "puertos" son interfaces que definen cómo el núcleo se comunica con el exterior, y los "adaptadores" son las implementaciones concretas de esas interfaces.
 
 ### Estructura del Proyecto
