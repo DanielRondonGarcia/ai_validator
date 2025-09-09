@@ -1,16 +1,10 @@
+using DataValidator.Domain.Services;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace DataValidatorApi.Services
+namespace DataValidator.API.Services
 {
-    public interface IPromptBuilderService
-    {
-        string BuildExtractionPrompt(string documentType, List<string>? fieldsToExtract = null);
-        string BuildValidationPrompt(string documentType, List<string> fieldsToValidate);
-        string BuildDiscrepancyAnalysisPrompt(string documentType, List<string> discrepancies);
-    }
-
     public class PromptBuilderService : IPromptBuilderService
     {
         public string BuildExtractionPrompt(string documentType, List<string>? fieldsToExtract = null)
