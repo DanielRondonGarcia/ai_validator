@@ -143,3 +143,59 @@ set OPENAI_API_KEY=tu_clave_de_api_de_openai
 
 5.  **Acceder a la Documentación de Swagger:**
     Una vez que la API esté en ejecución, puedes acceder a la documentación interactiva de Swagger en la URL `http://localhost:5252/swagger`. Desde allí, puedes probar el endpoint directamente desde tu navegador.
+
+## Comandos básicos (TL;DR)
+
+### .NET CLI (local)
+- Restaurar dependencias y compilar (Release):
+  ```bash
+  dotnet restore
+  dotnet build -c Release
+  ```
+- Ejecutar (usa launchSettings.json y Swagger en Development):
+  - Windows PowerShell (opcional: establecer claves solo para esta sesión):
+    ```powershell
+    $env:OPENAI_API_KEY="TU_OPENAI_KEY"
+    $env:GOOGLE_API_KEY="TU_GOOGLE_KEY"
+    dotnet run
+    ```
+  - Accede a Swagger:
+    - http://localhost:5252/swagger
+- Publicar binarios (opcional):
+  ```bash
+  dotnet publish -c Release -o ./publish
+  ```
+
+### Docker
+- Construir imagen (desde la carpeta DataValidatorApi donde está el Dockerfile):
+  ```bash
+  docker build -t datavalidatorapi:dev .
+  ```
+- Ejecutar en modo Development (Swagger disponible):
+  ```bash
+  docker run --rm -p 5252:8080 \
+    -e ASPNETCORE_ENVIRONMENT=Development \
+    -e OPENAI_API_KEY="TU_OPENAI_KEY" \
+    -e GOOGLE_API_KEY="TU_GOOGLE_KEY" \
+    datavalidatorapi:dev
+  ```
+  - Accede a Swagger: http://localhost:5252/swagger
+
+- Ejecutar en modo Production:
+  ```bash
+  docker run -d --name datavalidatorapi -p 8080:8080 \
+    -e ASPNETCORE_ENVIRONMENT=Production \
+    -e OPENAI_API_KEY="TU_OPENAI_KEY" \
+    -e GOOGLE_API_KEY="TU_GOOGLE_KEY" \
+    datavalidatorapi:dev
+  ```
+
+- Detener el contenedor:
+  ```bash
+  docker ps            # identifica el NAME o CONTAINER ID
+  docker stop datavalidatorapi
+  ```
+
+Notas:
+- El contenedor escucha internamente en 8080; para mantener 5252 en tu máquina, usa -p 5252:8080.
+- Las claves se leen de variables de entorno (OPENAI_API_KEY y GOOGLE_API_KEY). Si prefieres usar appsettings, indícalo para habilitar lectura desde configuración con fallback a variables de entorno.

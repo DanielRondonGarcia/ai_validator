@@ -22,11 +22,14 @@ namespace DataValidatorApi.Controllers
     [Route("api/[controller]")]
     public class ValidationController : ControllerBase
     {
+        private readonly IConfiguration _configuration;
+
         /// <summary>
         /// Constructor for ValidationController.
         /// </summary>
-        public ValidationController()
+        public ValidationController(IConfiguration configuration)
         {
+            _configuration = configuration;
             IronPdf.Installation.LinuxAndDockerDependenciesAutoConfig = true;
         }
 
@@ -42,40 +45,126 @@ namespace DataValidatorApi.Controllers
         [HttpPost("cross-validate")]
         public async Task<IActionResult> CrossValidate([FromForm] CrossValidationRequest request)
         {
+            Console.WriteLine("[INFO] Iniciando validación cruzada");
+            
             // Validaciones básicas
             if (request.File == null || request.File.Length == 0)
             {
+                Console.WriteLine("[ERROR] Archivo no proporcionado o vacío");
                 return BadRequest("File is not provided or empty.");
             }
 
             if (string.IsNullOrEmpty(request.JsonData))
             {
+                Console.WriteLine("[ERROR] Datos JSON no proporcionados");
                 return BadRequest("JSON data is not provided.");
             }
 
-            if (request.File.ContentType != "application/pdf")
+            // Validar tipos de archivo soportados
+            var supportedTypes = new[] { "application/pdf", "image/jpeg", "image/jpg", "image/png", "image/gif", "image/bmp", "image/webp" };
+            if (!supportedTypes.Contains(request.File.ContentType.ToLower()))
             {
-                return BadRequest("Invalid file type. Only PDF is supported.");
+                Console.WriteLine($"[ERROR] Tipo de archivo inválido: {request.File.ContentType}");
+                return BadRequest($"Invalid file type: {request.File.ContentType}. Supported types: PDF, JPEG, PNG, GIF, BMP, WebP.");
             }
+            
+            var isImage = request.File.ContentType.StartsWith("image/");
+            var isPdf = request.File.ContentType == "application/pdf";
+            Console.WriteLine($"[INFO] Tipo de archivo detectado: {(isImage ? "Imagen" : "PDF")}");
+
+            Console.WriteLine($"[INFO] Archivo recibido: {request.File.FileName}, Tamaño: {request.File.Length} bytes");
+            Console.WriteLine($"[INFO] Datos JSON recibidos: {request.JsonData.Substring(0, Math.Min(100, request.JsonData.Length))}...");
 
             try
             {
+                Console.WriteLine("[INFO] Detectando proveedor de IA disponible...");
                 // Detectar automáticamente el proveedor disponible
                 var availableProvider = await DetectAvailableProvider();
                 if (string.IsNullOrEmpty(availableProvider))
                 {
+                    Console.WriteLine("[ERROR] No hay proveedores de IA disponibles");
                     return StatusCode(500, "No AI provider is available. Please configure OPENAI_API_KEY or GOOGLE_API_KEY environment variables.");
                 }
 
-                return availableProvider switch
+                Console.WriteLine($"[INFO] Proveedor detectado: {availableProvider}");
+
+                // Procesar directamente con el proveedor detectado
+                request.Provider = availableProvider;
+                
+                // Guardar archivo temporalmente
+                var tempFilePath = Path.GetTempFileName();
+                using (var stream = new FileStream(tempFilePath, FileMode.Create))
                 {
-                    "openai" => await CrossValidateOpenAI(request),
-                    "gemini" => await CrossValidateGemini(request),
-                    _ => StatusCode(500, "Unable to determine available AI provider.")
-                };
+                    await request.File.CopyToAsync(stream);
+                }
+
+                string processedFilePath = tempFilePath;
+                
+                try
+                {
+                    
+                    // Lógica inteligente de procesamiento según tipo de archivo
+                    if (isImage)
+                    {
+                        Console.WriteLine("[INFO] Procesando imagen directamente...");
+                        // Las imágenes se procesan directamente
+                    }
+                    else if (isPdf)
+                    {
+                        Console.WriteLine("[INFO] Procesando PDF...");
+                        
+                        // Si es OpenAI, siempre convertir PDF a imagen
+                        if (availableProvider.ToLower() == "openai")
+                        {
+                            Console.WriteLine("[INFO] Convirtiendo PDF a imagen para OpenAI...");
+                            processedFilePath = await ConvertPdfToImage(request.File);
+                        }
+                        else
+                        {
+                            // Para Gemini, intentar procesar PDF directamente primero
+                            Console.WriteLine("[INFO] Intentando procesar PDF directamente con Gemini...");
+                            
+                            // Verificar si el PDF contiene principalmente imágenes
+                            var isPdfImageBased = await IsPdfImageBased(tempFilePath);
+                            if (isPdfImageBased)
+                            {
+                                Console.WriteLine("[INFO] PDF detectado como basado en imágenes, convirtiendo a imagen...");
+                                processedFilePath = await ConvertPdfFileToImage(tempFilePath);
+                            }
+                        }
+                    }
+
+                    Console.WriteLine($"[INFO] Iniciando extracción de información con {availableProvider}...");
+                    // Extraer información del archivo procesado
+                    var extractedInfo = await ExtractInformationFromImage(processedFilePath, availableProvider, request.DocumentType);
+                    Console.WriteLine($"[INFO] Información extraída exitosamente");
+
+                    Console.WriteLine($"[INFO] Iniciando comparación de datos...");
+                    // Comparar con los datos JSON proporcionados
+                    var result = await CompareDataWithAI(extractedInfo, request.JsonData, availableProvider, request.FieldsToValidate);
+                    Console.WriteLine($"[INFO] Validación cruzada completada");
+
+                    return Ok(result);
+                }
+                finally
+                {
+                    // Limpiar archivos temporales
+                    if (System.IO.File.Exists(tempFilePath))
+                    {
+                        System.IO.File.Delete(tempFilePath);
+                    }
+                    
+                    // Limpiar archivo procesado si es diferente del original
+                    if (processedFilePath != tempFilePath && System.IO.File.Exists(processedFilePath))
+                    {
+                        System.IO.File.Delete(processedFilePath);
+                    }
+                }
             }
             catch (Exception ex)
             {
+                Console.WriteLine($"[ERROR] Error durante la validación cruzada: {ex.Message}");
+                Console.WriteLine($"[ERROR] Stack trace: {ex.StackTrace}");
                 return StatusCode(500, $"An error occurred during cross-validation: {ex.Message}");
             }
         }
@@ -86,18 +175,23 @@ namespace DataValidatorApi.Controllers
         /// <returns>El nombre del proveedor disponible o null si ninguno está disponible</returns>
         private async Task<string?> DetectAvailableProvider()
         {
+            Console.WriteLine("[INFO] Verificando disponibilidad de OpenAI...");
             // Verificar OpenAI primero (generalmente más rápido)
             if (await IsOpenAIAvailable())
             {
+                Console.WriteLine("[INFO] OpenAI está disponible");
                 return "openai";
             }
 
+            Console.WriteLine("[INFO] OpenAI no disponible, verificando Gemini...");
             // Verificar Gemini como alternativa
             if (await IsGeminiAvailable())
             {
+                Console.WriteLine("[INFO] Gemini está disponible");
                 return "gemini";
             }
 
+            Console.WriteLine("[WARNING] Ningún proveedor de IA está disponible");
             return null;
         }
 
@@ -108,16 +202,23 @@ namespace DataValidatorApi.Controllers
         {
             try
             {
-                var apiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY");
+                Console.WriteLine("[DEBUG] Verificando clave de OpenAI...");
+                // Leer primero desde appsettings, luego desde variables de entorno
+                var apiKey = _configuration["AI:OpenAI:ApiKey"] ?? Environment.GetEnvironmentVariable("OPENAI_API_KEY");
                 if (string.IsNullOrEmpty(apiKey))
                 {
+                    Console.WriteLine("[DEBUG] Clave de OpenAI no encontrada");
                     return false;
                 }
 
+                Console.WriteLine($"[DEBUG] Clave de OpenAI encontrada (longitud: {apiKey.Length})");
+                Console.WriteLine("[DEBUG] Creando cliente OpenAI...");
+                
                 // Hacer una prueba rápida con OpenAI
                 var openAiClient = new OpenAIClient(apiKey);
                 var chatClient = openAiClient.GetChatClient("gpt-4o");
 
+                Console.WriteLine("[DEBUG] Preparando mensaje de prueba...");
                 var testMessages = new List<ChatMessage>
                 {
                     new UserChatMessage("Test")
@@ -128,11 +229,14 @@ namespace DataValidatorApi.Controllers
                     MaxOutputTokenCount = 1
                 };
 
+                Console.WriteLine("[DEBUG] Enviando solicitud de prueba a OpenAI...");
                 await chatClient.CompleteChatAsync(testMessages, testOptions);
+                Console.WriteLine("[DEBUG] Prueba de OpenAI exitosa");
                 return true;
             }
-            catch
+            catch (Exception ex)
             {
+                Console.WriteLine($"[DEBUG] Error en prueba de OpenAI: {ex.Message}");
                 return false;
             }
         }
@@ -144,7 +248,8 @@ namespace DataValidatorApi.Controllers
         {
             try
             {
-                var apiKey = Environment.GetEnvironmentVariable("GOOGLE_API_KEY");
+                // Leer primero desde appsettings, luego desde variables de entorno
+                var apiKey = _configuration["AI:Google:ApiKey"] ?? Environment.GetEnvironmentVariable("GOOGLE_API_KEY");
                 if (string.IsNullOrEmpty(apiKey))
                 {
                     return false;
@@ -168,96 +273,6 @@ namespace DataValidatorApi.Controllers
         }
 
         /// <summary>
-        /// Endpoint inteligente que analiza documentos PDF detectando automáticamente el proveedor de IA disponible.
-        /// </summary>
-        /// <remarks>
-        /// Sube un archivo PDF y una pregunta o prompt en lenguaje natural.
-        /// La API detectará automáticamente qué proveedor de IA está disponible (OpenAI o Google Gemini)
-        /// y utilizará el que esté funcional para procesar tu solicitud.
-        /// 
-        /// **Detección automática:** El sistema verifica primero OpenAI y luego Gemini.
-        /// **Variables de entorno requeridas:** `OPENAI_API_KEY` y/o `GOOGLE_API_KEY`.
-        ///
-        /// Ejemplo de prompt:
-        ///
-        ///     "¿Este documento es un certificado de finalización para el curso de .NET? ¿A nombre de quién está?"
-        ///
-        /// </remarks>
-        /// <param name="file">El archivo PDF a validar.</param>
-        /// <param name="schema">La pregunta o prompt en lenguaje natural para la IA.</param>
-        /// <returns>La respuesta de texto generada por el modelo de IA disponible.</returns>
-        /// <response code="200">Devuelve la respuesta de la IA con información del proveedor utilizado.</response>
-        /// <response code="400">Si el archivo o el prompt no se proporcionan, o si no hay proveedores disponibles.</response>
-        /// <response code="500">Si ocurre un error interno durante el procesamiento.</response>
-        [HttpPost("validate")]
-        public async Task<IActionResult> ValidateIntelligent(IFormFile file, [FromForm] string schema)
-        {
-            if (file == null || file.Length == 0)
-            {
-                return BadRequest("File is not provided or empty.");
-            }
-
-            if (string.IsNullOrEmpty(schema))
-            {
-                return BadRequest("Prompt (schema) is not provided.");
-            }
-
-            if (file.ContentType != "application/pdf")
-            {
-                return BadRequest("Invalid file type. Only PDF is supported for now.");
-            }
-
-            // Detectar proveedor disponible
-            var availableProvider = await DetectAvailableProvider();
-            if (string.IsNullOrEmpty(availableProvider))
-            {
-                return BadRequest("No AI providers are available. Please configure OPENAI_API_KEY or GOOGLE_API_KEY environment variables.");
-            }
-
-            string? tempFilePath = null;
-            try
-            {
-                // 1. Convert PDF page to an image
-                tempFilePath = await ConvertPdfToImage(file);
-
-                // 2. Call the available AI provider
-                string aiResponse;
-                string providerName;
-
-                if (availableProvider == "openai")
-                {
-                    aiResponse = await ProcessWithOpenAI(tempFilePath, schema);
-                    providerName = "OpenAI Vision";
-                }
-                else
-                {
-                    aiResponse = await ProcessWithGemini(tempFilePath, schema);
-                    providerName = "Google Gemini";
-                }
-
-                return Ok(new
-                {
-                    FileName = file.FileName,
-                    Prompt = schema,
-                    Provider = providerName,
-                    AI_Response = aiResponse,
-                    AutoDetected = true
-                });
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, $"An error occurred while processing the file with {availableProvider}: {ex.Message}");
-            }
-            finally
-            {
-                if (tempFilePath != null && System.IO.File.Exists(tempFilePath))
-                {
-                    System.IO.File.Delete(tempFilePath);
-                }
-            }
-        }
-
-        /// <summary>
         /// Procesa una imagen con OpenAI Vision
         /// </summary>
         /// <param name="imagePath">Ruta de la imagen temporal</param>
@@ -265,11 +280,14 @@ namespace DataValidatorApi.Controllers
         /// <returns>Respuesta de OpenAI</returns>
         private async Task<string> ProcessWithOpenAI(string imagePath, string prompt)
         {
-            var apiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY");
+            Console.WriteLine("[INFO] Iniciando procesamiento con OpenAI...");
+            var apiKey = _configuration["AI:OpenAI:ApiKey"] ?? Environment.GetEnvironmentVariable("OPENAI_API_KEY");
             var openAiClient = new OpenAIClient(apiKey!);
             var chatClient = openAiClient.GetChatClient("gpt-4o");
 
+            Console.WriteLine($"[INFO] Leyendo imagen desde: {imagePath}");
             var imageBytes = await System.IO.File.ReadAllBytesAsync(imagePath);
+            Console.WriteLine($"[INFO] Imagen leída, tamaño: {imageBytes.Length} bytes");
 
             var messages = new List<ChatMessage>
             {
@@ -284,7 +302,9 @@ namespace DataValidatorApi.Controllers
                 MaxOutputTokenCount = 1000
             };
 
+            Console.WriteLine("[INFO] Enviando solicitud a OpenAI...");
             var response = await chatClient.CompleteChatAsync(messages, chatCompletionOptions);
+            Console.WriteLine("[INFO] Respuesta recibida de OpenAI");
             return response.Value.Content[0].Text;
         }
 
@@ -296,7 +316,7 @@ namespace DataValidatorApi.Controllers
         /// <returns>Respuesta de Gemini</returns>
         private async Task<string> ProcessWithGemini(string imagePath, string prompt)
         {
-            var apiKey = Environment.GetEnvironmentVariable("GOOGLE_API_KEY");
+            var apiKey = _configuration["AI:Google:ApiKey"] ?? Environment.GetEnvironmentVariable("GOOGLE_API_KEY");
             var googleAI = new GoogleAi(apiKey!);
             var generativeModel = googleAI.CreateGenerativeModel("gemini-1.5-flash-latest");
 
@@ -338,28 +358,220 @@ namespace DataValidatorApi.Controllers
             return tempFilePath;
         }
 
-
-
         /// <summary>
-        /// Valida datos JSON contra PDF/imagen usando Gemini específicamente
+        /// Convierte la primera página de un PDF desde archivo a una imagen PNG temporal.
         /// </summary>
-        [HttpPost("cross-validate-gemini")]
-        [Consumes("multipart/form-data")]
-        public async Task<IActionResult> CrossValidateGemini([FromForm] CrossValidationRequest request)
+        /// <param name="pdfFilePath">La ruta del archivo PDF a convertir.</param>
+        /// <returns>La ruta del archivo temporal de imagen creado.</returns>
+        private async Task<string> ConvertPdfFileToImage(string pdfFilePath)
         {
-            request.Provider = "gemini";
-            return await CrossValidate(request);
+            var pdfBytes = await System.IO.File.ReadAllBytesAsync(pdfFilePath);
+            await using var pdfStream = new MemoryStream(pdfBytes);
+            var pdf = new PdfDocument(pdfStream);
+
+            if (pdf.PageCount == 0)
+            {
+                throw new InvalidOperationException("The provided PDF has no pages.");
+            }
+
+            AnyBitmap? pageBitmap = pdf.ToBitmap().FirstOrDefault();
+            if (pageBitmap == null)
+            {
+                throw new InvalidOperationException("Failed to convert PDF page to image.");
+            }
+
+            // Save image to a temporary file
+            var tempFilePath = Path.GetTempFileName() + ".png";
+            pageBitmap.SaveAs(tempFilePath);
+
+            return tempFilePath;
         }
 
         /// <summary>
-        /// Valida datos JSON contra PDF/imagen usando OpenAI específicamente
+        /// Determina si un PDF está basado principalmente en imágenes
         /// </summary>
-        [HttpPost("cross-validate-openai")]
-        [Consumes("multipart/form-data")]
-        public async Task<IActionResult> CrossValidateOpenAI([FromForm] CrossValidationRequest request)
+        /// <param name="pdfFilePath">La ruta del archivo PDF a analizar.</param>
+        /// <returns>True si el PDF contiene principalmente imágenes, False si contiene texto extraíble.</returns>
+        private async Task<bool> IsPdfImageBased(string pdfFilePath)
         {
-            request.Provider = "openai";
-            return await CrossValidate(request);
+            try
+            {
+                var pdfBytes = await System.IO.File.ReadAllBytesAsync(pdfFilePath);
+                await using var pdfStream = new MemoryStream(pdfBytes);
+                var pdf = new PdfDocument(pdfStream);
+
+                if (pdf.PageCount == 0)
+                {
+                    return false;
+                }
+
+                // Intentar extraer texto de todo el PDF
+                var extractedText = pdf.ExtractAllText();
+                
+                // Si hay poco o ningún texto extraíble, probablemente es una imagen
+                var textLength = extractedText?.Trim().Length ?? 0;
+                Console.WriteLine($"[INFO] Texto extraído del PDF: {textLength} caracteres");
+                
+                // Si tiene menos de 50 caracteres de texto, considerarlo como imagen
+                return textLength < 50;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[WARNING] Error al analizar PDF, asumiendo que es basado en imágenes: {ex.Message}");
+                return true; // En caso de error, asumir que es imagen para mayor compatibilidad
+            }
+        }
+
+
+
+        /// <summary>
+        /// Valida datos JSON contra archivos PDF
+        /// </summary>
+        [HttpPost("validate-pdf")]
+        [Consumes("multipart/form-data")]
+        public async Task<IActionResult> ValidatePdf([FromForm] CrossValidationRequest request)
+        {
+            // Validaciones básicas
+            if (request.File == null || request.File.Length == 0)
+            {
+                return BadRequest("File is not provided.");
+            }
+
+            if (string.IsNullOrWhiteSpace(request.JsonData))
+            {
+                return BadRequest("JSON data is not provided.");
+            }
+
+            if (request.File.ContentType != "application/pdf")
+            {
+                return BadRequest("Invalid file type. Only PDF is supported.");
+            }
+
+            try
+            {
+                Console.WriteLine("[INFO] Detectando proveedor de IA disponible...");
+                // Detectar automáticamente el proveedor disponible
+                var availableProvider = await DetectAvailableProvider();
+                if (string.IsNullOrEmpty(availableProvider))
+                {
+                    Console.WriteLine("[ERROR] No hay proveedores de IA disponibles");
+                    return StatusCode(500, "No AI provider is available. Please configure OPENAI_API_KEY or GOOGLE_API_KEY environment variables.");
+                }
+
+                Console.WriteLine($"[INFO] Proveedor detectado: {availableProvider}");
+                request.Provider = availableProvider;
+                
+                // Guardar archivo temporalmente
+                var tempFilePath = Path.GetTempFileName();
+                using (var stream = new FileStream(tempFilePath, FileMode.Create))
+                {
+                    await request.File.CopyToAsync(stream);
+                }
+
+                try
+                {
+                    Console.WriteLine($"[INFO] Iniciando extracción de información con {availableProvider}...");
+                    // Extraer información de la imagen
+                    var extractedInfo = await ExtractInformationFromImage(tempFilePath, availableProvider, request.DocumentType);
+                    Console.WriteLine($"[INFO] Información extraída exitosamente");
+
+                    Console.WriteLine($"[INFO] Iniciando comparación de datos...");
+                    // Comparar con los datos JSON proporcionados
+                    var result = await CompareDataWithAI(extractedInfo, request.JsonData, availableProvider, request.FieldsToValidate);
+                    Console.WriteLine($"[INFO] Validación completada");
+
+                    return Ok(result);
+                }
+                finally
+                {
+                    // Limpiar archivo temporal
+                    if (System.IO.File.Exists(tempFilePath))
+                    {
+                        System.IO.File.Delete(tempFilePath);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[ERROR] Error durante la validación: {ex.Message}");
+                return StatusCode(500, $"An error occurred during validation: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Valida datos JSON contra archivos de imagen
+        /// </summary>
+        [HttpPost("validate-image")]
+        [Consumes("multipart/form-data")]
+        public async Task<IActionResult> ValidateImage([FromForm] CrossValidationRequest request)
+        {
+            // Validaciones básicas
+            if (request.File == null || request.File.Length == 0)
+            {
+                return BadRequest("File is not provided.");
+            }
+
+            if (string.IsNullOrWhiteSpace(request.JsonData))
+            {
+                return BadRequest("JSON data is not provided.");
+            }
+
+            // Validar tipos de imagen soportados
+            var supportedImageTypes = new[] { "image/jpeg", "image/jpg", "image/png", "image/gif", "image/bmp", "image/webp" };
+            if (!supportedImageTypes.Contains(request.File.ContentType?.ToLower()))
+            {
+                return BadRequest("Invalid file type. Supported image types: JPEG, PNG, GIF, BMP, WebP.");
+            }
+
+            try
+            {
+                Console.WriteLine("[INFO] Detectando proveedor de IA disponible...");
+                // Detectar automáticamente el proveedor disponible
+                var availableProvider = await DetectAvailableProvider();
+                if (string.IsNullOrEmpty(availableProvider))
+                {
+                    Console.WriteLine("[ERROR] No hay proveedores de IA disponibles");
+                    return StatusCode(500, "No AI provider is available. Please configure OPENAI_API_KEY or GOOGLE_API_KEY environment variables.");
+                }
+
+                Console.WriteLine($"[INFO] Proveedor detectado: {availableProvider}");
+                request.Provider = availableProvider;
+                
+                // Guardar archivo temporalmente
+                var tempFilePath = Path.GetTempFileName();
+                using (var stream = new FileStream(tempFilePath, FileMode.Create))
+                {
+                    await request.File.CopyToAsync(stream);
+                }
+
+                try
+                {
+                    Console.WriteLine($"[INFO] Iniciando extracción de información con {availableProvider}...");
+                    // Extraer información de la imagen directamente (sin conversión)
+                    var extractedInfo = await ExtractInformationFromImage(tempFilePath, availableProvider, request.DocumentType);
+                    Console.WriteLine($"[INFO] Información extraída exitosamente");
+
+                    Console.WriteLine($"[INFO] Iniciando comparación de datos...");
+                    // Comparar con los datos JSON proporcionados
+                    var result = await CompareDataWithAI(extractedInfo, request.JsonData, availableProvider, request.FieldsToValidate);
+                    Console.WriteLine($"[INFO] Validación completada");
+
+                    return Ok(result);
+                }
+                finally
+                {
+                    // Limpiar archivo temporal
+                    if (System.IO.File.Exists(tempFilePath))
+                    {
+                        System.IO.File.Delete(tempFilePath);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[ERROR] Error durante la validación: {ex.Message}");
+                return StatusCode(500, $"An error occurred during validation: {ex.Message}");
+            }
         }
 
         /// <summary>
@@ -367,14 +579,38 @@ namespace DataValidatorApi.Controllers
         /// </summary>
         private async Task<string> ExtractInformationFromImage(string imagePath, string provider, string? documentType)
         {
+            Console.WriteLine($"[INFO] Iniciando extracción de información con {provider}...");
+            Console.WriteLine($"[INFO] Tipo de documento: {documentType ?? "no especificado"}");
             string prompt = CreateExtractionPrompt(documentType);
+            Console.WriteLine($"[INFO] Prompt de extracción creado, longitud: {prompt.Length} caracteres");
 
+            string processedImagePath = imagePath;
+            
+            // Si es OpenAI y el archivo parece ser PDF, convertirlo a imagen
             if (provider.ToLower() == "openai")
             {
-                return await ExtractWithOpenAI(imagePath, prompt);
+                // Verificar si el archivo es PDF leyendo los primeros bytes
+                var fileBytes = await System.IO.File.ReadAllBytesAsync(imagePath);
+                if (fileBytes.Length > 4 && fileBytes[0] == 0x25 && fileBytes[1] == 0x50 && fileBytes[2] == 0x44 && fileBytes[3] == 0x46) // %PDF
+                {
+                    Console.WriteLine("[INFO] Archivo PDF detectado, convirtiendo a imagen para OpenAI...");
+                    processedImagePath = await ConvertPdfFileToImage(imagePath);
+                }
+                
+                Console.WriteLine("[INFO] Usando OpenAI para extracción...");
+                var result = await ExtractWithOpenAI(processedImagePath, prompt);
+                
+                // Limpiar archivo temporal si se creó uno
+                if (processedImagePath != imagePath && System.IO.File.Exists(processedImagePath))
+                {
+                    System.IO.File.Delete(processedImagePath);
+                }
+                
+                return result;
             }
             else
             {
+                Console.WriteLine("[INFO] Usando Gemini para extracción...");
                 return await ExtractWithGemini(imagePath, prompt);
             }
         }
@@ -402,15 +638,21 @@ namespace DataValidatorApi.Controllers
         /// </summary>
         private async Task<string> ExtractWithGemini(string imagePath, string prompt)
         {
-            var apiKey = Environment.GetEnvironmentVariable("GOOGLE_API_KEY");
+            Console.WriteLine("[INFO] Iniciando extracción con Gemini...");
+            var apiKey = _configuration["AI:Google:ApiKey"] ?? Environment.GetEnvironmentVariable("GOOGLE_API_KEY");
             if (string.IsNullOrEmpty(apiKey))
             {
+                Console.WriteLine("[ERROR] La clave de API de Google no está configurada.");
                 throw new InvalidOperationException("La clave de API de Google no está configurada.");
             }
 
+            Console.WriteLine("[INFO] Creando modelo Gemini...");
             var model = new GenerativeModel(apiKey, "gemma-3");
 
+            Console.WriteLine($"[INFO] Leyendo imagen desde: {imagePath}");
             var imageBytes = await System.IO.File.ReadAllBytesAsync(imagePath);
+            Console.WriteLine($"[INFO] Imagen leída, tamaño: {imageBytes.Length} bytes");
+            
             var content = new Content();
             content.AddText(prompt);
             content.AddInlineFile("image/png", Convert.ToBase64String(imageBytes));
@@ -418,7 +660,9 @@ namespace DataValidatorApi.Controllers
             var request = new GenerateContentRequest();
             request.Contents.Add(content);
 
+            Console.WriteLine("[INFO] Enviando solicitud a Gemini...");
             var response = await model.GenerateContentAsync(request);
+            Console.WriteLine("[INFO] Respuesta recibida de Gemini");
             return response.Text() ?? "No se pudo extraer información.";
         }
 
@@ -429,7 +673,7 @@ namespace DataValidatorApi.Controllers
         {
             Console.WriteLine("[DEBUG] Iniciando ExtractWithOpenAI");
 
-            var apiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY");
+            var apiKey = _configuration["AI:OpenAI:ApiKey"] ?? Environment.GetEnvironmentVariable("OPENAI_API_KEY");
             Console.WriteLine($"[DEBUG] OPENAI_API_KEY encontrada: {!string.IsNullOrEmpty(apiKey)}");
             Console.WriteLine($"[DEBUG] Longitud de la clave: {apiKey?.Length ?? 0}");
 
@@ -479,22 +723,28 @@ namespace DataValidatorApi.Controllers
         /// </summary>
         private async Task<CrossValidationResponse> CompareDataWithAI(string extractedInfo, string jsonData, string provider, List<string>? fieldsToValidate)
         {
+            Console.WriteLine($"[INFO] Iniciando comparación de datos con {provider}...");
             string comparisonPrompt = CreateComparisonPrompt(extractedInfo, jsonData, fieldsToValidate);
+            Console.WriteLine($"[INFO] Prompt de comparación creado, longitud: {comparisonPrompt.Length} caracteres");
 
             string aiResponse;
             if (provider.ToLower() == "openai")
             {
+                Console.WriteLine("[INFO] Usando OpenAI para comparación...");
                 aiResponse = await GetComparisonFromOpenAI(comparisonPrompt);
             }
             else
             {
+                Console.WriteLine("[INFO] Usando Gemini para comparación...");
                 aiResponse = await GetComparisonFromGemini(comparisonPrompt);
             }
 
+            Console.WriteLine("[INFO] Parseando respuesta de validación...");
             var response = ParseValidationResponse(aiResponse, provider);
             response.ExtractedData = extractedInfo;
             response.ProvidedData = jsonData;
             response.AIResponse = aiResponse;
+            Console.WriteLine($"[INFO] Comparación completada. Resultado válido: {response.IsValid}");
             return response;
         }
 
@@ -549,7 +799,7 @@ namespace DataValidatorApi.Controllers
         {
             Console.WriteLine("[DEBUG] Iniciando GetComparisonFromOpenAI");
 
-            var apiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY");
+            var apiKey = _configuration["AI:OpenAI:ApiKey"] ?? Environment.GetEnvironmentVariable("OPENAI_API_KEY");
             Console.WriteLine($"[DEBUG] OPENAI_API_KEY encontrada: {!string.IsNullOrEmpty(apiKey)}");
             Console.WriteLine($"[DEBUG] Longitud de la clave: {apiKey?.Length ?? 0}");
 
@@ -592,12 +842,15 @@ namespace DataValidatorApi.Controllers
         /// </summary>
         private async Task<string> GetComparisonFromGemini(string prompt)
         {
-            var apiKey = Environment.GetEnvironmentVariable("GOOGLE_API_KEY");
+            Console.WriteLine("[INFO] Iniciando comparación con Gemini...");
+            var apiKey = _configuration["AI:Google:ApiKey"] ?? Environment.GetEnvironmentVariable("GOOGLE_API_KEY");
             if (string.IsNullOrEmpty(apiKey))
             {
+                Console.WriteLine("[ERROR] La clave de API de Google no está configurada.");
                 throw new InvalidOperationException("La clave de API de Google no está configurada.");
             }
 
+            Console.WriteLine("[INFO] Creando modelo Gemini para comparación...");
             var model = new GenerativeModel(apiKey, "gemini-1.5-pro");
 
             var content = new Content();
@@ -606,7 +859,9 @@ namespace DataValidatorApi.Controllers
             var request = new GenerateContentRequest();
             request.Contents.Add(content);
 
+            Console.WriteLine("[INFO] Enviando solicitud de comparación a Gemini...");
             var response = await model.GenerateContentAsync(request);
+            Console.WriteLine("[INFO] Respuesta de comparación recibida de Gemini");
             return response.Text() ?? "No se pudo obtener respuesta de validación.";
         }
 
