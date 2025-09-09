@@ -1,201 +1,126 @@
 # API de Validación de Documentos con IA
 
-Esta es una API RESTful simple construida con .NET 8 y C# que utiliza inteligencia artificial para analizar el contenido de documentos PDF.
+Esta es una API RESTful construida con .NET 8 y C# que utiliza inteligencia artificial para analizar y validar el contenido de documentos. El proyecto está estructurado siguiendo los principios de la **Arquitectura Hexagonal (Puertos y Adaptadores)**, lo que permite una gran flexibilidad para cambiar o añadir nuevas tecnologías (como diferentes proveedores de IA) con un impacto mínimo en la lógica de negocio principal.
 
-## Descripción
+## Arquitectura Hexagonal
 
-El propósito de esta API es permitir a un sistema externo validar el contenido de un documento (por ahora, solo PDF) haciéndole una pregunta en lenguaje natural. Por ejemplo, se puede subir un certificado de un curso y preguntar: "¿Este certificado confirma la finalización del curso 'Introducción a la Programación'?".
+El proyecto está dividido en tres capas principales, cada una con una responsabilidad clara:
 
-La API utiliza:
-- **IronPdf** para procesar el archivo PDF y convertir su primera página en una imagen.
-- **Google Gemini Pro Vision** (a través del SDK `Google_GenerativeAI`) para analizar la imagen.
-- **OpenAI Vision (GPT-4 Vision)** (a través del SDK `OpenAI`) como alternativa para el análisis de imágenes.
+-   `DataValidator.Domain`: Este es el núcleo de la aplicación. Contiene la lógica de negocio, los modelos de dominio (por ejemplo, `ValidationResult`) y las interfaces (conocidas como **Puertos**) que definen los contratos para cualquier servicio externo que la aplicación necesite (por ejemplo, `IAiVisionProvider`, `IAiAnalysisProvider`). Esta capa no depende de ninguna otra capa del proyecto, lo que la hace completamente independiente de la tecnología.
 
-Ambos proveedores de IA analizan la imagen en el contexto de la pregunta proporcionada por el usuario.
+-   `DataValidator.Infrastructure`: Esta capa contiene las implementaciones concretas de los puertos definidos en el Dominio. Estas implementaciones se conocen como **Adaptadores**. Por ejemplo, aquí es donde se encuentra el código específico para llamar a la API de OpenAI o a la de Google Gemini. Si quisiéramos añadir soporte para un nuevo proveedor de IA, simplemente añadiríamos un nuevo adaptador en este proyecto.
+
+-   `DataValidator.API`: Esta es la capa de entrada de la aplicación. En este caso, es una API web que expone endpoints HTTP. Actúa como el **adaptador primario** que dirige la aplicación. Es responsable de recibir las solicitudes, llamar a los servicios de la aplicación (que orquestan la lógica del dominio) y devolver las respuestas. También es responsable de la configuración y de la inyección de dependencias, es decir, de "conectar" los adaptadores de la infraestructura a los puertos del dominio.
 
 ## Cómo Usar la API
 
-### Endpoints Disponibles
+### Endpoint Disponible
 
-1. **`POST /api/validation/validate`** - Endpoint unificado que permite elegir el proveedor de IA
-2. **`POST /api/validation/validate-gemini`** - Específico para Google Gemini
-3. **`POST /api/validation/validate-openai`** - Específico para OpenAI Vision
+Con la nueva arquitectura, solo hay un endpoint principal que maneja todas las validaciones:
+
+-   **`POST /api/validation/cross-validate`**: Valida un documento (PDF o imagen) utilizando los proveedores de IA configurados.
 
 ### Petición
 
 La petición debe ser de tipo `multipart/form-data` y contener los siguientes campos:
 
-1. `file`: El archivo PDF que se desea validar.
-2. `schema`: Una cadena de texto que contiene la pregunta o prompt en lenguaje natural para la IA.
-3. `provider` (solo para `/validate`): El proveedor de IA a usar: `"gemini"` o `"openai"`. Por defecto es `"gemini"`.
+1.  `File`: El archivo PDF o imagen que se desea validar.
+2.  `JsonData`: Una cadena de texto que contiene los datos en formato JSON con los que se comparará el contenido del archivo.
+3.  `DocumentType`: (Opcional) Una cadena que describe el tipo de documento para dar más contexto a la IA (ej: "factura", "contrato").
+4.  `FieldsToValidate`: (Opcional) Una lista de campos específicos que se deben validar.
 
-### Ejemplos de Uso
-
-**Usando el endpoint unificado con Google Gemini (por defecto):**
-
-```bash
-curl -X POST "http://localhost:5252/api/validation/validate" \
--H "Content-Type: multipart/form-data" \
--F "file=@/ruta/a/tu/documento.pdf" \
--F "schema=¿Este documento es un certificado de finalización para el curso de .NET?"
-```
-
-**Usando el endpoint unificado con OpenAI Vision:**
+### Ejemplo de Uso
 
 ```bash
-curl -X POST "http://localhost:5252/api/validation/validate" \
+curl -X POST "http://localhost:5252/api/validation/cross-validate" \
 -H "Content-Type: multipart/form-data" \
--F "file=@/ruta/a/tu/documento.pdf" \
--F "schema=¿Este documento es un certificado de finalización para el curso de .NET?" \
--F "provider=openai"
+-F "File=@/ruta/a/tu/documento.pdf" \
+-F "JsonData={\\"nombre\\":\\"John Doe\\"}" \
+-F "DocumentType=CV"
 ```
 
-**Usando el endpoint específico de OpenAI:**
+## Configuración y Cambio de Proveedor de IA
 
-```bash
-curl -X POST "http://localhost:5252/api/validation/validate-openai" \
--H "Content-Type: multipart/form-data" \
--F "file=@/ruta/a/tu/documento.pdf" \
--F "schema=¿Este documento es un certificado de finalización para el curso de .NET?"
-```
+La principal ventaja de la arquitectura hexagonal es la facilidad para cambiar las dependencias externas. Para cambiar el proveedor de IA para la visión o el análisis, no necesitas cambiar el código, solo tienes que modificar el archivo `appsettings.json`.
 
-### Respuesta Exitosa (Código 200)
+### `appsettings.json`
 
-La API devolverá un objeto JSON con la respuesta generada por el modelo de IA.
+Este archivo contiene la configuración de los modelos de IA a utilizar.
 
 ```json
 {
-  "fileName": "documento.pdf",
-  "prompt": "¿Este documento es un certificado de finalización para el curso de .NET?",
-  "provider": "Google Gemini",
-  "ai_Response": "Sí, este documento es un certificado de finalización para el curso de .NET, otorgado a Jules."
+  "AIModels": {
+    "VisionModel": {
+      "Provider": "OpenAI", // Opciones: "OpenAI", "Google"
+      "Model": "gpt-4-vision-preview",
+      "ApiKey": "TU_CLAVE_DE_API_DE_OPENAI",
+      "BaseUrl": "https://api.openai.com/v1"
+    },
+    "AnalysisModel": {
+      "Provider": "Google", // Opciones: "OpenAI", "Google"
+      "Model": "gemini-pro",
+      "ApiKey": "TU_CLAVE_DE_API_DE_GOOGLE",
+      "BaseUrl": "https://generativelanguage.googleapis.com/v1beta"
+    },
+    "AlternativeVisionModel": {
+      "Provider": "Google",
+      "Model": "gemini-pro-vision"
+    },
+    "AlternativeAnalysisModel": {
+      "Provider": "OpenAI",
+      "Model": "gpt-4-turbo-preview"
+    }
+  }
 }
 ```
 
-### Respuestas de Error
+### Ejemplo: Cómo cambiar el proveedor de Visión Artificial
 
-- **Código 400 (Bad Request):** Si falta el archivo, el prompt, la clave de API no está configurada, o se especifica un proveedor inválido.
-- **Código 500 (Internal Server Error):** Si ocurre un error durante el procesamiento del PDF o la comunicación con la API de IA.
+Para cambiar el proveedor de extracción de datos de imágenes de `OpenAI` a `Google`, simplemente modifica la sección `VisionModel` en tu `appsettings.Development.json` (o el archivo de configuración que corresponda):
 
-## Configuración
-
-### Variables de Entorno Requeridas
-
-Antes de usar la API, debes configurar las claves de API correspondientes como variables de entorno:
-
-#### Para Google Gemini:
-```bash
-set GOOGLE_API_KEY=tu_clave_de_api_de_google
+**Antes (usando OpenAI):**
+```json
+"VisionModel": {
+  "Provider": "OpenAI",
+  "Model": "gpt-4-vision-preview",
+  "ApiKey": "TU_CLAVE_DE_API_DE_OPENAI",
+  "BaseUrl": "https://api.openai.com/v1"
+}
 ```
 
-#### Para OpenAI Vision:
-```bash
-set OPENAI_API_KEY=tu_clave_de_api_de_openai
+**Después (usando Google Gemini):**
+```json
+"VisionModel": {
+  "Provider": "Google",
+  "Model": "gemini-pro-vision",
+  "ApiKey": "TU_CLAVE_DE_API_DE_GOOGLE",
+  "BaseUrl": "https://generativelanguage.googleapis.com/v1beta"
+}
 ```
 
-**Nota:** Solo necesitas configurar la clave del proveedor que planeas usar. Si usas el endpoint unificado, asegúrate de tener configurada la clave del proveedor seleccionado.
-
-### Obtener las Claves de API
-
-- **Google Gemini:** Visita [Google AI Studio](https://makersuite.google.com/app/apikey) para obtener tu clave de API.
-- **OpenAI:** Visita [OpenAI Platform](https://platform.openai.com/api-keys) para obtener tu clave de API.
+La aplicación detectará automáticamente el cambio en la configuración y utilizará el `GeminiVisionAdapter` en lugar del `OpenAiVisionAdapter` la próxima vez que se inicie, sin necesidad de recompilar o cambiar una sola línea de código en la lógica de negocio.
 
 ## Cómo Compilar y Ejecutar el Proyecto
 
 ### Prerrequisitos
 
 - [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
-- Una clave de API de Google para los servicios de IA Generativa. Puedes obtenerla desde [Google AI Studio](https://aistudio.google.com/app/apikey).
 
 ### Pasos
 
-1.  **Clonar el repositorio:**
-    ```bash
-    git clone <URL_DEL_REPOSITORIO>
-    cd <NOMBRE_DEL_REPOSITORIO>/DataValidatorApi
-    ```
-
-2.  **Configurar la Clave de API de Google:**
-    La aplicación necesita acceso a tu clave de API de Google. Debes configurarla como una variable de entorno.
-
-    En Linux/macOS:
-    ```bash
-    export GOOGLE_API_KEY="TU_CLAVE_DE_API_AQUI"
-    ```
-
-    En Windows (PowerShell):
-    ```bash
-    $env:GOOGLE_API_KEY="TU_CLAVE_DE_API_AQUI"
-    ```
-
+1.  **Clonar el repositorio y navegar a la raíz del proyecto.**
+2.  **Configurar las Claves de API:**
+    Abre el archivo `DataValidator.API/appsettings.Development.json` y añade tus claves de API para los proveedores que desees utilizar.
 3.  **Restaurar dependencias y compilar:**
-    Navega al directorio del proyecto `DataValidatorApi` y ejecuta:
+    Desde la raíz del repositorio, donde se encuentra el archivo `DataValidator.sln`, ejecuta:
     ```bash
     dotnet restore
     dotnet build
     ```
-
 4.  **Ejecutar la API:**
     ```bash
-    dotnet run
+    dotnet run --project DataValidator.API
     ```
     La API se ejecutará y estará disponible en las URLs que se muestran en la consola (por ejemplo, `http://localhost:5252`).
-
 5.  **Acceder a la Documentación de Swagger:**
-    Una vez que la API esté en ejecución, puedes acceder a la documentación interactiva de Swagger en la URL `http://localhost:5252/swagger`. Desde allí, puedes probar el endpoint directamente desde tu navegador.
-
-## Comandos básicos (TL;DR)
-
-### .NET CLI (local)
-- Restaurar dependencias y compilar (Release):
-  ```bash
-  dotnet restore
-  dotnet build -c Release
-  ```
-- Ejecutar (usa launchSettings.json y Swagger en Development):
-  - Windows PowerShell (opcional: establecer claves solo para esta sesión):
-    ```powershell
-    $env:OPENAI_API_KEY="TU_OPENAI_KEY"
-    $env:GOOGLE_API_KEY="TU_GOOGLE_KEY"
-    dotnet run
-    ```
-  - Accede a Swagger:
-    - http://localhost:5252/swagger
-- Publicar binarios (opcional):
-  ```bash
-  dotnet publish -c Release -o ./publish
-  ```
-
-### Docker
-- Construir imagen (desde la carpeta DataValidatorApi donde está el Dockerfile):
-  ```bash
-  docker build -t datavalidatorapi:dev .
-  ```
-- Ejecutar en modo Development (Swagger disponible):
-  ```bash
-  docker run --rm -p 5252:8080 \
-    -e ASPNETCORE_ENVIRONMENT=Development \
-    -e OPENAI_API_KEY="TU_OPENAI_KEY" \
-    -e GOOGLE_API_KEY="TU_GOOGLE_KEY" \
-    datavalidatorapi:dev
-  ```
-  - Accede a Swagger: http://localhost:5252/swagger
-
-- Ejecutar en modo Production:
-  ```bash
-  docker run -d --name datavalidatorapi -p 8080:8080 \
-    -e ASPNETCORE_ENVIRONMENT=Production \
-    -e OPENAI_API_KEY="TU_OPENAI_KEY" \
-    -e GOOGLE_API_KEY="TU_GOOGLE_KEY" \
-    datavalidatorapi:dev
-  ```
-
-- Detener el contenedor:
-  ```bash
-  docker ps            # identifica el NAME o CONTAINER ID
-  docker stop datavalidatorapi
-  ```
-
-Notas:
-- El contenedor escucha internamente en 8080; para mantener 5252 en tu máquina, usa -p 5252:8080.
-- Las claves se leen de variables de entorno (OPENAI_API_KEY y GOOGLE_API_KEY). Si prefieres usar appsettings, indícalo para habilitar lectura desde configuración con fallback a variables de entorno.
+    Una vez que la API esté en ejecución, puedes acceder a la documentación interactiva de Swagger en la URL `http://localhost:5252/swagger`.
