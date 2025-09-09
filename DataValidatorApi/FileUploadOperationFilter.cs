@@ -17,9 +17,9 @@ public class FileUploadOperationFilter : IOperationFilter
     public void Apply(OpenApiOperation operation, OperationFilterContext context)
     {
         var parameters = context.MethodInfo.GetParameters();
-        
+
         // Check if any parameter has FromForm attribute or is IFormFile
-        var hasFormParameters = parameters.Any(p => 
+        var hasFormParameters = parameters.Any(p =>
             p.GetCustomAttribute<FromFormAttribute>() != null ||
             p.ParameterType == typeof(IFormFile) ||
             p.ParameterType == typeof(IFormFile[]) ||
@@ -53,7 +53,7 @@ public class FileUploadOperationFilter : IOperationFilter
             var fromFormAttribute = parameter.GetCustomAttribute<FromFormAttribute>();
 
             var isComplex = IsComplexType(parameter.ParameterType);
-            
+
             // Prefer flattening complex types annotated with [FromForm]
             if (fromFormAttribute != null && isComplex)
             {
@@ -72,31 +72,31 @@ public class FileUploadOperationFilter : IOperationFilter
         }
 
         // Remove parameters that are now in the request body
-        operation.Parameters = operation.Parameters?.Where(p => 
+        operation.Parameters = operation.Parameters?.Where(p =>
             !parameters.Any(param => param.Name == p.Name)).ToList();
     }
 
     private void AddParameterToSchema(OpenApiSchema schema, ParameterInfo parameter)
     {
         var parameterSchema = CreateSchemaForType(parameter.ParameterType);
-        
+
         // Handle optional parameters
         if (parameter.HasDefaultValue || IsNullableType(parameter.ParameterType))
         {
             parameterSchema.Nullable = true;
         }
-        
+
         schema.Properties[parameter.Name ?? "unknown"] = parameterSchema;
     }
 
     private void AddComplexTypeToSchema(OpenApiSchema schema, Type type)
     {
         var properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
-        
+
         foreach (var property in properties)
         {
             var propertySchema = CreateSchemaForType(property.PropertyType);
-            
+
             var isRequired = property.GetCustomAttribute<System.ComponentModel.DataAnnotations.RequiredAttribute>() != null;
 
             // Nullable when not required or nullable type
@@ -113,7 +113,7 @@ public class FileUploadOperationFilter : IOperationFilter
                     schema.Required.Add(property.Name);
                 }
             }
-            
+
             schema.Properties[property.Name] = propertySchema;
         }
     }
@@ -128,22 +128,22 @@ public class FileUploadOperationFilter : IOperationFilter
                 Format = "binary"
             };
         }
-        
+
         if (type == typeof(string))
         {
             return new OpenApiSchema { Type = "string" };
         }
-        
+
         if (type == typeof(int) || type == typeof(int?))
         {
             return new OpenApiSchema { Type = "integer", Format = "int32" };
         }
-        
+
         if (type == typeof(bool) || type == typeof(bool?))
         {
             return new OpenApiSchema { Type = "boolean" };
         }
-        
+
         if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(List<>))
         {
             var itemType = type.GetGenericArguments()[0];
@@ -153,13 +153,13 @@ public class FileUploadOperationFilter : IOperationFilter
                 Items = CreateSchemaForType(itemType)
             };
         }
-        
+
         // For other complex types, represent as object to avoid string fallback
         if (IsComplexType(type))
         {
             return new OpenApiSchema { Type = "object" };
         }
-        
+
         // Default to string for unknown primitive-like types
         return new OpenApiSchema { Type = "string" };
     }
@@ -168,23 +168,23 @@ public class FileUploadOperationFilter : IOperationFilter
     {
         if (type == typeof(IFormFile) || type == typeof(IFormFile[]))
             return true;
-            
+
         if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(IEnumerable<>))
         {
             var genericArg = type.GetGenericArguments()[0];
             if (genericArg == typeof(IFormFile))
                 return true;
         }
-        
+
         // Check if any property is IFormFile
         var properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
-        return properties.Any(p => p.PropertyType == typeof(IFormFile) || 
+        return properties.Any(p => p.PropertyType == typeof(IFormFile) ||
                                   p.PropertyType == typeof(IFormFile[]) ||
-                                  (p.PropertyType.IsGenericType && 
+                                  (p.PropertyType.IsGenericType &&
                                    p.PropertyType.GetGenericTypeDefinition() == typeof(IEnumerable<>) &&
                                    p.PropertyType.GetGenericArguments()[0] == typeof(IFormFile)));
     }
-    
+
     private bool IsNullableType(Type type)
     {
         return type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Nullable<>) ||

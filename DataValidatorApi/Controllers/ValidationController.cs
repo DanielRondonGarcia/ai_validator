@@ -117,7 +117,7 @@ namespace DataValidatorApi.Controllers
                 // Hacer una prueba rápida con OpenAI
                 var openAiClient = new OpenAIClient(apiKey);
                 var chatClient = openAiClient.GetChatClient("gpt-4o");
-                
+
                 var testMessages = new List<ChatMessage>
                 {
                     new UserChatMessage("Test")
@@ -154,10 +154,10 @@ namespace DataValidatorApi.Controllers
                 var model = new GenerativeModel(apiKey, "gemini-1.5-flash-latest");
                 var content = new Content();
                 content.AddText("Test");
-                
+
                 var request = new GenerateContentRequest();
                 request.Contents.Add(content);
-                
+
                 await model.GenerateContentAsync(request);
                 return true;
             }
@@ -223,7 +223,7 @@ namespace DataValidatorApi.Controllers
                 // 2. Call the available AI provider
                 string aiResponse;
                 string providerName;
-                
+
                 if (availableProvider == "openai")
                 {
                     aiResponse = await ProcessWithOpenAI(tempFilePath, schema);
@@ -235,7 +235,8 @@ namespace DataValidatorApi.Controllers
                     providerName = "Google Gemini";
                 }
 
-                return Ok(new {
+                return Ok(new
+                {
                     FileName = file.FileName,
                     Prompt = schema,
                     Provider = providerName,
@@ -267,7 +268,7 @@ namespace DataValidatorApi.Controllers
             var apiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY");
             var openAiClient = new OpenAIClient(apiKey!);
             var chatClient = openAiClient.GetChatClient("gpt-4o");
-            
+
             var imageBytes = await System.IO.File.ReadAllBytesAsync(imagePath);
 
             var messages = new List<ChatMessage>
@@ -333,7 +334,7 @@ namespace DataValidatorApi.Controllers
             // Save image to a temporary file
             var tempFilePath = Path.GetTempFileName() + ".png";
             pageBitmap.SaveAs(tempFilePath);
-            
+
             return tempFilePath;
         }
 
@@ -359,102 +360,102 @@ namespace DataValidatorApi.Controllers
         {
             request.Provider = "openai";
             return await CrossValidate(request);
-         }
+        }
 
-         /// <summary>
-         /// Extrae información estructurada de una imagen usando IA
-         /// </summary>
-         private async Task<string> ExtractInformationFromImage(string imagePath, string provider, string? documentType)
-         {
-             string prompt = CreateExtractionPrompt(documentType);
-             
-             if (provider.ToLower() == "openai")
-             {
-                 return await ExtractWithOpenAI(imagePath, prompt);
-             }
-             else
-             {
-                 return await ExtractWithGemini(imagePath, prompt);
-             }
-         }
+        /// <summary>
+        /// Extrae información estructurada de una imagen usando IA
+        /// </summary>
+        private async Task<string> ExtractInformationFromImage(string imagePath, string provider, string? documentType)
+        {
+            string prompt = CreateExtractionPrompt(documentType);
 
-         /// <summary>
-         /// Crea el prompt para extracción de información según el tipo de documento
-         /// </summary>
-         private string CreateExtractionPrompt(string? documentType)
-         {
-             string basePrompt = "Analiza esta imagen y extrae toda la información importante en formato JSON estructurado. ";
-             
-             return documentType?.ToLower() switch
-             {
-                 "certificado" => basePrompt + "Este es un certificado. Extrae: nombre del titular, institución emisora, fecha de emisión, fecha de vencimiento, número de certificado, tipo de certificación, y cualquier otra información relevante.",
-                 "factura" => basePrompt + "Esta es una factura. Extrae: número de factura, fecha, proveedor, cliente, items/productos, cantidades, precios, subtotal, impuestos, total, y términos de pago.",
-                 "contrato" => basePrompt + "Este es un contrato. Extrae: partes involucradas, fecha del contrato, objeto del contrato, duración, términos principales, firmas, y fechas importantes.",
-                 "identificacion" => basePrompt + "Este es un documento de identificación. Extrae: nombre completo, número de documento, fecha de nacimiento, fecha de emisión, fecha de vencimiento, lugar de nacimiento, y otros datos personales.",
-                 "diploma" => basePrompt + "Este es un diploma. Extrae: nombre del graduado, institución, título/grado obtenido, fecha de graduación, firmas de autoridades, y sellos oficiales.",
-                 _ => basePrompt + "Extrae toda la información textual visible, incluyendo nombres, fechas, números, direcciones, y cualquier dato estructurado que encuentres."
-             };
-         }
+            if (provider.ToLower() == "openai")
+            {
+                return await ExtractWithOpenAI(imagePath, prompt);
+            }
+            else
+            {
+                return await ExtractWithGemini(imagePath, prompt);
+            }
+        }
 
-         /// <summary>
-         /// Extrae información usando Gemini
-         /// </summary>
-         private async Task<string> ExtractWithGemini(string imagePath, string prompt)
-         {
-             var apiKey = Environment.GetEnvironmentVariable("GOOGLE_API_KEY");
-             if (string.IsNullOrEmpty(apiKey))
-             {
-                 throw new InvalidOperationException("La clave de API de Google no está configurada.");
-             }
+        /// <summary>
+        /// Crea el prompt para extracción de información según el tipo de documento
+        /// </summary>
+        private string CreateExtractionPrompt(string? documentType)
+        {
+            string basePrompt = "Analiza esta imagen y extrae toda la información importante en formato JSON estructurado. ";
 
-             var model = new GenerativeModel(apiKey, "gemini-1.5-pro-vision-latest");
-             
-             var imageBytes = await System.IO.File.ReadAllBytesAsync(imagePath);
-             var content = new Content();
-             content.AddText(prompt);
-             content.AddInlineFile("image/png", Convert.ToBase64String(imageBytes));
-             
-             var request = new GenerateContentRequest();
-             request.Contents.Add(content);
-             
-             var response = await model.GenerateContentAsync(request);
-             return response.Text() ?? "No se pudo extraer información.";
-         }
+            return documentType?.ToLower() switch
+            {
+                "certificado" => basePrompt + "Este es un certificado. Extrae: nombre del titular, institución emisora, fecha de emisión, fecha de vencimiento, número de certificado, tipo de certificación, y cualquier otra información relevante.",
+                "factura" => basePrompt + "Esta es una factura. Extrae: número de factura, fecha, proveedor, cliente, items/productos, cantidades, precios, subtotal, impuestos, total, y términos de pago.",
+                "contrato" => basePrompt + "Este es un contrato. Extrae: partes involucradas, fecha del contrato, objeto del contrato, duración, términos principales, firmas, y fechas importantes.",
+                "identificacion" => basePrompt + "Este es un documento de identificación. Extrae: nombre completo, número de documento, fecha de nacimiento, fecha de emisión, fecha de vencimiento, lugar de nacimiento, y otros datos personales.",
+                "diploma" => basePrompt + "Este es un diploma. Extrae: nombre del graduado, institución, título/grado obtenido, fecha de graduación, firmas de autoridades, y sellos oficiales.",
+                _ => basePrompt + "Extrae toda la información textual visible, incluyendo nombres, fechas, números, direcciones, y cualquier dato estructurado que encuentres."
+            };
+        }
 
-         /// <summary>
-         /// Extrae información usando OpenAI
-         /// </summary>
-         private async Task<string> ExtractWithOpenAI(string imagePath, string prompt)
-         {
-             Console.WriteLine("[DEBUG] Iniciando ExtractWithOpenAI");
-             
-             var apiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY");
-             Console.WriteLine($"[DEBUG] OPENAI_API_KEY encontrada: {!string.IsNullOrEmpty(apiKey)}");
-             Console.WriteLine($"[DEBUG] Longitud de la clave: {apiKey?.Length ?? 0}");
-             
-             if (string.IsNullOrEmpty(apiKey))
-             {
-                 Console.WriteLine("[ERROR] La clave de API de OpenAI no está configurada en ExtractWithOpenAI.");
-                 Console.WriteLine("[DEBUG] Variables de entorno disponibles:");
-                 foreach (DictionaryEntry env in Environment.GetEnvironmentVariables())
-                 {
-                     if (env.Key.ToString().Contains("OPENAI", StringComparison.OrdinalIgnoreCase))
-                     {
-                         Console.WriteLine($"[DEBUG] {env.Key}: {env.Value}");
-                     }
-                 }
-                 throw new InvalidOperationException("La clave de API de OpenAI no está configurada.");
-             }
+        /// <summary>
+        /// Extrae información usando Gemini
+        /// </summary>
+        private async Task<string> ExtractWithGemini(string imagePath, string prompt)
+        {
+            var apiKey = Environment.GetEnvironmentVariable("GOOGLE_API_KEY");
+            if (string.IsNullOrEmpty(apiKey))
+            {
+                throw new InvalidOperationException("La clave de API de Google no está configurada.");
+            }
 
-             Console.WriteLine("[DEBUG] Creando cliente OpenAI para extracción");
-             var openAiClient = new OpenAIClient(apiKey);
-             var chatClient = openAiClient.GetChatClient("gpt-4o");
-             
-             Console.WriteLine($"[DEBUG] Leyendo imagen desde: {imagePath}");
-             var imageBytes = await System.IO.File.ReadAllBytesAsync(imagePath);
-             Console.WriteLine($"[DEBUG] Imagen leída, tamaño: {imageBytes.Length} bytes");
-             
-             var messages = new List<ChatMessage>
+            var model = new GenerativeModel(apiKey, "gemma-3");
+
+            var imageBytes = await System.IO.File.ReadAllBytesAsync(imagePath);
+            var content = new Content();
+            content.AddText(prompt);
+            content.AddInlineFile("image/png", Convert.ToBase64String(imageBytes));
+
+            var request = new GenerateContentRequest();
+            request.Contents.Add(content);
+
+            var response = await model.GenerateContentAsync(request);
+            return response.Text() ?? "No se pudo extraer información.";
+        }
+
+        /// <summary>
+        /// Extrae información usando OpenAI
+        /// </summary>
+        private async Task<string> ExtractWithOpenAI(string imagePath, string prompt)
+        {
+            Console.WriteLine("[DEBUG] Iniciando ExtractWithOpenAI");
+
+            var apiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY");
+            Console.WriteLine($"[DEBUG] OPENAI_API_KEY encontrada: {!string.IsNullOrEmpty(apiKey)}");
+            Console.WriteLine($"[DEBUG] Longitud de la clave: {apiKey?.Length ?? 0}");
+
+            if (string.IsNullOrEmpty(apiKey))
+            {
+                Console.WriteLine("[ERROR] La clave de API de OpenAI no está configurada en ExtractWithOpenAI.");
+                Console.WriteLine("[DEBUG] Variables de entorno disponibles:");
+                foreach (DictionaryEntry env in Environment.GetEnvironmentVariables())
+                {
+                    if (env.Key.ToString().Contains("OPENAI", StringComparison.OrdinalIgnoreCase))
+                    {
+                        Console.WriteLine($"[DEBUG] {env.Key}: {env.Value}");
+                    }
+                }
+                throw new InvalidOperationException("La clave de API de OpenAI no está configurada.");
+            }
+
+            Console.WriteLine("[DEBUG] Creando cliente OpenAI para extracción");
+            var openAiClient = new OpenAIClient(apiKey);
+            var chatClient = openAiClient.GetChatClient("gpt-4o");
+
+            Console.WriteLine($"[DEBUG] Leyendo imagen desde: {imagePath}");
+            var imageBytes = await System.IO.File.ReadAllBytesAsync(imagePath);
+            Console.WriteLine($"[DEBUG] Imagen leída, tamaño: {imageBytes.Length} bytes");
+
+            var messages = new List<ChatMessage>
              {
                  new UserChatMessage(
                      ChatMessageContentPart.CreateTextPart(prompt),
@@ -462,47 +463,47 @@ namespace DataValidatorApi.Controllers
                  )
              };
 
-             var chatCompletionOptions = new ChatCompletionOptions
-             {
-                 MaxOutputTokenCount = 1500
-             };
+            var chatCompletionOptions = new ChatCompletionOptions
+            {
+                MaxOutputTokenCount = 1500
+            };
 
-             Console.WriteLine("[DEBUG] Enviando solicitud extracción a OpenAI");
-             var response = await chatClient.CompleteChatAsync(messages, chatCompletionOptions);
-             Console.WriteLine("[DEBUG] Respuesta de extracción recibida de OpenAI");
-             return response.Value.Content[0].Text;
-         }
+            Console.WriteLine("[DEBUG] Enviando solicitud extracción a OpenAI");
+            var response = await chatClient.CompleteChatAsync(messages, chatCompletionOptions);
+            Console.WriteLine("[DEBUG] Respuesta de extracción recibida de OpenAI");
+            return response.Value.Content[0].Text;
+        }
 
-         /// <summary>
-         /// Compara los datos JSON con la información extraída usando IA
-         /// </summary>
-         private async Task<CrossValidationResponse> CompareDataWithAI(string extractedInfo, string jsonData, string provider, List<string>? fieldsToValidate)
-         {
-             string comparisonPrompt = CreateComparisonPrompt(extractedInfo, jsonData, fieldsToValidate);
-             
-             string aiResponse;
-             if (provider.ToLower() == "openai")
-             {
-                 aiResponse = await GetComparisonFromOpenAI(comparisonPrompt);
-             }
-             else
-             {
-                 aiResponse = await GetComparisonFromGemini(comparisonPrompt);
-             }
+        /// <summary>
+        /// Compara los datos JSON con la información extraída usando IA
+        /// </summary>
+        private async Task<CrossValidationResponse> CompareDataWithAI(string extractedInfo, string jsonData, string provider, List<string>? fieldsToValidate)
+        {
+            string comparisonPrompt = CreateComparisonPrompt(extractedInfo, jsonData, fieldsToValidate);
 
-             var response = ParseValidationResponse(aiResponse, provider);
-             response.ExtractedData = extractedInfo;
-             response.ProvidedData = jsonData;
-             response.AIResponse = aiResponse;
-             return response;
-         }
+            string aiResponse;
+            if (provider.ToLower() == "openai")
+            {
+                aiResponse = await GetComparisonFromOpenAI(comparisonPrompt);
+            }
+            else
+            {
+                aiResponse = await GetComparisonFromGemini(comparisonPrompt);
+            }
 
-         /// <summary>
-         /// Crea el prompt para comparación de datos
-         /// </summary>
-         private string CreateComparisonPrompt(string extractedInfo, string jsonData, List<string>? fieldsToValidate)
-         {
-             var prompt = $@"
+            var response = ParseValidationResponse(aiResponse, provider);
+            response.ExtractedData = extractedInfo;
+            response.ProvidedData = jsonData;
+            response.AIResponse = aiResponse;
+            return response;
+        }
+
+        /// <summary>
+        /// Crea el prompt para comparación de datos
+        /// </summary>
+        private string CreateComparisonPrompt(string extractedInfo, string jsonData, List<string>? fieldsToValidate)
+        {
+            var prompt = $@"
              Eres un experto validador de documentos. Tu tarea es comparar la información extraída de un documento con los datos proporcionados en JSON.
              
              INFORMACIÓN EXTRAÍDA DEL DOCUMENTO:
@@ -533,134 +534,134 @@ namespace DataValidatorApi.Controllers
                  ]
              }}";
 
-             if (fieldsToValidate?.Any() == true)
-             {
-                 prompt += $"\n\nVALIDA ÚNICAMENTE ESTOS CAMPOS: {string.Join(", ", fieldsToValidate)}";
-             }
+            if (fieldsToValidate?.Any() == true)
+            {
+                prompt += $"\n\nVALIDA ÚNICAMENTE ESTOS CAMPOS: {string.Join(", ", fieldsToValidate)}";
+            }
 
-             return prompt;
-         }
+            return prompt;
+        }
 
-         /// <summary>
-         /// Obtiene comparación usando OpenAI
-         /// </summary>
-         private async Task<string> GetComparisonFromOpenAI(string prompt)
-         {
-             Console.WriteLine("[DEBUG] Iniciando GetComparisonFromOpenAI");
-             
-             var apiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY");
-             Console.WriteLine($"[DEBUG] OPENAI_API_KEY encontrada: {!string.IsNullOrEmpty(apiKey)}");
-             Console.WriteLine($"[DEBUG] Longitud de la clave: {apiKey?.Length ?? 0}");
-             
-             if (string.IsNullOrEmpty(apiKey))
-             {
-                 Console.WriteLine("[ERROR] La clave de API de OpenAI no está configurada.");
-                 Console.WriteLine("[DEBUG] Variables de entorno disponibles:");
-                 foreach (DictionaryEntry env in Environment.GetEnvironmentVariables())
-                 {
-                     if (env.Key.ToString().Contains("OPENAI", StringComparison.OrdinalIgnoreCase))
-                     {
-                         Console.WriteLine($"[DEBUG] {env.Key}: {env.Value}");
-                     }
-                 }
-                 throw new InvalidOperationException("La clave de API de OpenAI no está configurada.");
-             }
+        /// <summary>
+        /// Obtiene comparación usando OpenAI
+        /// </summary>
+        private async Task<string> GetComparisonFromOpenAI(string prompt)
+        {
+            Console.WriteLine("[DEBUG] Iniciando GetComparisonFromOpenAI");
 
-             Console.WriteLine("[DEBUG] Creando cliente OpenAI");
-             var openAiClient = new OpenAIClient(apiKey);
-             var chatClient = openAiClient.GetChatClient("gpt-4");
-             
-             var messages = new List<ChatMessage>
+            var apiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY");
+            Console.WriteLine($"[DEBUG] OPENAI_API_KEY encontrada: {!string.IsNullOrEmpty(apiKey)}");
+            Console.WriteLine($"[DEBUG] Longitud de la clave: {apiKey?.Length ?? 0}");
+
+            if (string.IsNullOrEmpty(apiKey))
+            {
+                Console.WriteLine("[ERROR] La clave de API de OpenAI no está configurada.");
+                Console.WriteLine("[DEBUG] Variables de entorno disponibles:");
+                foreach (DictionaryEntry env in Environment.GetEnvironmentVariables())
+                {
+                    if (env.Key.ToString().Contains("OPENAI", StringComparison.OrdinalIgnoreCase))
+                    {
+                        Console.WriteLine($"[DEBUG] {env.Key}: {env.Value}");
+                    }
+                }
+                throw new InvalidOperationException("La clave de API de OpenAI no está configurada.");
+            }
+
+            Console.WriteLine("[DEBUG] Creando cliente OpenAI");
+            var openAiClient = new OpenAIClient(apiKey);
+            var chatClient = openAiClient.GetChatClient("gpt-4");
+
+            var messages = new List<ChatMessage>
              {
                  new UserChatMessage(prompt)
              };
 
-             var chatCompletionOptions = new ChatCompletionOptions
-             {
-                 MaxOutputTokenCount = 2000
-             };
+            var chatCompletionOptions = new ChatCompletionOptions
+            {
+                MaxOutputTokenCount = 2000
+            };
 
-             Console.WriteLine("[DEBUG] Enviando solicitud a OpenAI");
-             var response = await chatClient.CompleteChatAsync(messages, chatCompletionOptions);
-             Console.WriteLine("[DEBUG] Respuesta recibida de OpenAI");
-             return response.Value.Content[0].Text;
-         }
+            Console.WriteLine("[DEBUG] Enviando solicitud a OpenAI");
+            var response = await chatClient.CompleteChatAsync(messages, chatCompletionOptions);
+            Console.WriteLine("[DEBUG] Respuesta recibida de OpenAI");
+            return response.Value.Content[0].Text;
+        }
 
-         /// <summary>
-         /// Obtiene comparación usando Gemini
-         /// </summary>
-         private async Task<string> GetComparisonFromGemini(string prompt)
-         {
-             var apiKey = Environment.GetEnvironmentVariable("GOOGLE_API_KEY");
-             if (string.IsNullOrEmpty(apiKey))
-             {
-                 throw new InvalidOperationException("La clave de API de Google no está configurada.");
-             }
+        /// <summary>
+        /// Obtiene comparación usando Gemini
+        /// </summary>
+        private async Task<string> GetComparisonFromGemini(string prompt)
+        {
+            var apiKey = Environment.GetEnvironmentVariable("GOOGLE_API_KEY");
+            if (string.IsNullOrEmpty(apiKey))
+            {
+                throw new InvalidOperationException("La clave de API de Google no está configurada.");
+            }
 
-             var model = new GenerativeModel(apiKey, "gemini-1.5-pro");
-             
-             var content = new Content();
-             content.AddText(prompt);
-             
-             var request = new GenerateContentRequest();
-             request.Contents.Add(content);
-             
-             var response = await model.GenerateContentAsync(request);
-             return response.Text() ?? "No se pudo obtener respuesta de validación.";
-         }
+            var model = new GenerativeModel(apiKey, "gemini-1.5-pro");
 
-         /// <summary>
-         /// Parsea la respuesta de IA y crea el objeto de respuesta
-         /// </summary>
-         private CrossValidationResponse ParseValidationResponse(string aiResponse, string provider)
-         {
-             try
-             {
-                 // Intentar extraer JSON de la respuesta
-                 var jsonStart = aiResponse.IndexOf('{');
-                 var jsonEnd = aiResponse.LastIndexOf('}');
-                 
-                 if (jsonStart >= 0 && jsonEnd > jsonStart)
-                 {
-                     var jsonContent = aiResponse.Substring(jsonStart, jsonEnd - jsonStart + 1);
-                     var validationResult = JsonSerializer.Deserialize<JsonElement>(jsonContent);
-                     
-                     var response = new CrossValidationResponse
-                     {
-                         IsValid = validationResult.GetProperty("isValid").GetBoolean(),
-                         ConfidenceScore = validationResult.GetProperty("overallConfidence").GetInt32(),
-                         Provider = provider,
-                         FieldValidations = new List<FieldValidationResult>()
-                     };
+            var content = new Content();
+            content.AddText(prompt);
 
-                     if (validationResult.TryGetProperty("fieldValidations", out var fieldsArray))
-                     {
-                         foreach (var field in fieldsArray.EnumerateArray())
-                         {
-                             response.FieldValidations.Add(new FieldValidationResult
-                             {
-                                 FieldName = field.GetProperty("fieldName").GetString() ?? "",
-                                 IsMatch = field.GetProperty("isValid").GetBoolean(),
-                                 ConfidenceScore = field.GetProperty("confidence").GetInt32(),
-                                 ExtractedValue = field.TryGetProperty("extractedValue", out var extracted) ? extracted.GetString() : null,
-                                 ProvidedValue = field.TryGetProperty("providedValue", out var provided) ? provided.GetString() : null,
-                                 Notes = field.TryGetProperty("notes", out var notes) ? notes.GetString() : null
-                             });
-                         }
-                     }
+            var request = new GenerateContentRequest();
+            request.Contents.Add(content);
 
-                     return response;
-                 }
-             }
-             catch (Exception ex)
-             {
-                 // Si falla el parsing, crear respuesta de error
-                 return new CrossValidationResponse
-                 {
-                     IsValid = false,
-                     ConfidenceScore = 0,
-                     Provider = provider,
-                     FieldValidations = new List<FieldValidationResult>
+            var response = await model.GenerateContentAsync(request);
+            return response.Text() ?? "No se pudo obtener respuesta de validación.";
+        }
+
+        /// <summary>
+        /// Parsea la respuesta de IA y crea el objeto de respuesta
+        /// </summary>
+        private CrossValidationResponse ParseValidationResponse(string aiResponse, string provider)
+        {
+            try
+            {
+                // Intentar extraer JSON de la respuesta
+                var jsonStart = aiResponse.IndexOf('{');
+                var jsonEnd = aiResponse.LastIndexOf('}');
+
+                if (jsonStart >= 0 && jsonEnd > jsonStart)
+                {
+                    var jsonContent = aiResponse.Substring(jsonStart, jsonEnd - jsonStart + 1);
+                    var validationResult = JsonSerializer.Deserialize<JsonElement>(jsonContent);
+
+                    var response = new CrossValidationResponse
+                    {
+                        IsValid = validationResult.GetProperty("isValid").GetBoolean(),
+                        ConfidenceScore = validationResult.GetProperty("overallConfidence").GetInt32(),
+                        Provider = provider,
+                        FieldValidations = new List<FieldValidationResult>()
+                    };
+
+                    if (validationResult.TryGetProperty("fieldValidations", out var fieldsArray))
+                    {
+                        foreach (var field in fieldsArray.EnumerateArray())
+                        {
+                            response.FieldValidations.Add(new FieldValidationResult
+                            {
+                                FieldName = field.GetProperty("fieldName").GetString() ?? "",
+                                IsMatch = field.GetProperty("isValid").GetBoolean(),
+                                ConfidenceScore = field.GetProperty("confidence").GetInt32(),
+                                ExtractedValue = field.TryGetProperty("extractedValue", out var extracted) ? extracted.GetString() : null,
+                                ProvidedValue = field.TryGetProperty("providedValue", out var provided) ? provided.GetString() : null,
+                                Notes = field.TryGetProperty("notes", out var notes) ? notes.GetString() : null
+                            });
+                        }
+                    }
+
+                    return response;
+                }
+            }
+            catch (Exception ex)
+            {
+                // Si falla el parsing, crear respuesta de error
+                return new CrossValidationResponse
+                {
+                    IsValid = false,
+                    ConfidenceScore = 0,
+                    Provider = provider,
+                    FieldValidations = new List<FieldValidationResult>
                      {
                          new FieldValidationResult
                          {
@@ -670,16 +671,16 @@ namespace DataValidatorApi.Controllers
                              Notes = $"Error al procesar respuesta de IA: {ex.Message}"
                          }
                      }
-                 };
-             }
+                };
+            }
 
-             // Respuesta de fallback
-             return new CrossValidationResponse
-             {
-                 IsValid = false,
-                 ConfidenceScore = 0,
-                 Provider = provider,
-                 FieldValidations = new List<FieldValidationResult>
+            // Respuesta de fallback
+            return new CrossValidationResponse
+            {
+                IsValid = false,
+                ConfidenceScore = 0,
+                Provider = provider,
+                FieldValidations = new List<FieldValidationResult>
                  {
                      new FieldValidationResult
                      {
@@ -689,7 +690,7 @@ namespace DataValidatorApi.Controllers
                          Notes = "No se pudo procesar la respuesta de validación"
                      }
                  }
-             };
-         }
-     }
+            };
+        }
+    }
 }
