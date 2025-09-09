@@ -21,6 +21,10 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
-
+  <ItemGroup>
+    <ProjectReference Include="..\DataValidator.API\DataValidator.API.csproj" />
+    <ProjectReference Include="..\DataValidator.Domain\DataValidator.Domain.csproj" />
+    <ProjectReference Include="..\DataValidator.Infrastructure\DataValidator.Infrastructure.csproj" />
+  </ItemGroup>
 
 </Project>
