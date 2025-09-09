@@ -11,6 +11,7 @@ using System.IO;
 using System.Text;
 using System.Collections.Generic;
 using Microsoft.Extensions.Configuration;
+using DataValidator.API.Models; // <-- Added this using statement
 
 namespace DataValidator.Tests
 {

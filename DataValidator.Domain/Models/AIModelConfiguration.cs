@@ -1,4 +1,4 @@
-namespace DataValidatorApi.Models
+namespace DataValidator.Domain.Models
 {
     public class AIModelsConfiguration
     {
@@ -16,18 +16,5 @@ namespace DataValidatorApi.Models
         public string BaseUrl { get; set; } = string.Empty;
         public int MaxTokens { get; set; } = 2000;
         public double Temperature { get; set; } = 0.2;
-    }
-
-    public enum AIProvider
-    {
-        OpenAI,
-        Google,
-        Anthropic
-    }
-
-    public enum ModelType
-    {
-        Vision,
-        Analysis
     }
 }
