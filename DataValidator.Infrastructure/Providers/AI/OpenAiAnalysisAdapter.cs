@@ -37,7 +37,7 @@ namespace DataValidator.Infrastructure.Providers.AI
                     new
                     {
                         role = "system",
-                        content = $"You are an expert data validation analyst with extensive experience in document processing and data verification. Current date: {DateTime.Now:yyyy-MM-dd HH:mm:ss UTC}. \n\nYour responsibilities:\n- Analyze provided data with meticulous attention to detail\n- Identify inconsistencies, errors, or missing information\n- Validate data formats, ranges, and business logic\n- Consider temporal context when evaluating date-sensitive information\n- Provide comprehensive validation results in the specified JSON format\n- Flag any anomalies or suspicious patterns\n\nAlways maintain objectivity and provide clear reasoning for your validation decisions."
+                        content = $"Eres un analista experto en validación de datos con amplia experiencia en procesamiento de documentos y verificación de datos. Fecha actual: {DateTime.Now:yyyy-MM-dd HH:mm:ss UTC}. \n\nTus responsabilidades:\n- Analizar los datos proporcionados con meticulosa atención al detalle\n- Identificar inconsistencias, errores o información faltante\n- Validar formatos de datos, rangos y lógica de negocio\n- Considerar el contexto temporal al evaluar información sensible a fechas\n- Proporcionar resultados de validación completos en el formato JSON especificado\n- Señalar cualquier anomalía o patrón sospechoso\n\nMantén siempre la objetividad y proporciona un razonamiento claro para tus decisiones de validación."
                     },
                     new
                     {
@@ -45,7 +45,8 @@ namespace DataValidator.Infrastructure.Providers.AI
                         content = prompt
                     }
                 },
-                max_tokens = config.MaxTokens,
+                //max_tokens = config.MaxTokens,
+                max_completion_tokens = config.MaxTokens,
                 temperature = config.Temperature,
                 response_format = new { type = "json_object" }
             };

@@ -64,7 +64,7 @@ namespace DataValidator.Tests
             _mockVisionService.Setup(s => s.ExtractDataFromPdfAsync(It.IsAny<byte[]>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<List<string>>()))
                 .ReturnsAsync(new VisionExtractionResult { Success = true, ExtractedData = "Extracted" });
             
-            _mockAnalysisService.Setup(s => s.ValidateExtractedDataAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<List<string>>()))
+            _mockAnalysisService.Setup(s => s.ValidateExtractedDataAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<List<string>>(), It.IsAny<string>()))
                 .ReturnsAsync(new ValidationAnalysisResult { Success = true, IsValid = true });
 
             // Act

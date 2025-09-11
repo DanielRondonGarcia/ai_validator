@@ -94,7 +94,8 @@ namespace DataValidator.API.Controllers
                 var validationResult = await _analysisValidationService.ValidateExtractedDataAsync(
                     extractionResult.ExtractedData,
                     request.DocumentType ?? "document",
-                    request.FieldsToValidate ?? new());
+                    request.FieldsToValidate ?? new(),
+                    request.JsonData);
 
                 if (!validationResult.Success)
                 {

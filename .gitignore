@@ -389,3 +389,6 @@ secrets.json
 .Trashes
 ehthumbs.db
 Thumbs.db
+DataValidator.API/DataValidator.API.csproj.user
+*.user
+DataValidator.API/DataValidator.API.csproj.user

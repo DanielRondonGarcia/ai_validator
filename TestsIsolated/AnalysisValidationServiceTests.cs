@@ -52,7 +52,7 @@ namespace DataValidator.Tests
             _mockPrimaryProvider.Setup(p => p.AnalyzeDataAsync(It.IsAny<string>())).ReturnsAsync(providerResult);
 
             // Act
-            var result = await service.ValidateExtractedDataAsync("some data", "invoice", new List<string>());
+            var result = await service.ValidateExtractedDataAsync("some data", "invoice", new List<string>(), "test json data");
 
             // Assert
             Assert.True(result.Success);
@@ -79,7 +79,7 @@ namespace DataValidator.Tests
             _mockAlternativeProvider.Setup(p => p.AnalyzeDataAsync(It.IsAny<string>())).ReturnsAsync(successProviderResult);
 
             // Act
-            var result = await service.ValidateExtractedDataAsync("some data", "invoice", new List<string>());
+            var result = await service.ValidateExtractedDataAsync("some data", "invoice", new List<string>(), "test json data");
 
             // Assert
             Assert.True(result.Success);

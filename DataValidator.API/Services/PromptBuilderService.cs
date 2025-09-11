@@ -68,53 +68,36 @@ Ensure these priority fields are extracted with maximum accuracy and detail.";
             return basePrompt;
         }
 
-        public string BuildValidationPrompt(string documentType, List<string> fieldsToValidate)
+        public string BuildValidationPrompt(string documentType, List<string> fieldsToValidate, string jsonData)
         {
             var fieldsText = fieldsToValidate != null && fieldsToValidate.Any() 
                 ? string.Join(", ", fieldsToValidate)
                 : "all available fields";
             
-            return @$"You are an expert data validation specialist focused on {documentType} document analysis.
+            return @$"Eres un especialista experto en la validación de datos, enfocado en el análisis de {documentType}.
 
-**TASK**: Perform comprehensive validation of extracted data against the original document.
+**TAREA:** Realiza una validación de los datos extraídos comparándolos con el `jsonData` proporcionado.
 
-**DOCUMENT TYPE**: {documentType}
+**TIPO DE DOCUMENTO**: {documentType}
 **FIELDS TO VALIDATE**: {fieldsText}
+**jsonData TO VALIDATE**: {jsonData}
 
-**VALIDATION CRITERIA**:
+**CRITERIOS DE VALIDACIÓN:**
 
-1. **Accuracy Verification**:
-   - Compare extracted data with source document
-   - Identify any transcription errors
-   - Check for missing or incomplete information
-   - Verify data type consistency
+**1. Enfoque de Validación:**
+*   **Crítico:** Céntrate **exclusivamente** en los campos listados en `FIELDS TO VALIDATE`. Ignora cualquier discrepancia en otros campos.
+*   Si `FIELDS TO VALIDATE` especifica `all available fields`, entonces y solo entonces, analiza todos los campos del documento.
 
-2. **Format Compliance**:
-   - Validate date formats and ranges
-   - Check numeric values and calculations
-   - Verify address and contact information formats
-   - Ensure proper capitalization and spelling
+**2. Verificación de Exactitud:**
+*   Compara el valor de `extractedFields` con el valor correspondiente en `jsonData TO VALIDATE`.
+*   Identifica discrepancias en el contenido (por ejemplo, nombres o cursos diferentes).
 
-3. **Completeness Assessment**:
-   - Identify missing required fields
-   - Check for partial extractions
-   - Verify all visible data was captured
+**3. Tratamiento de Formatos:**
+*   **Fechas:** No consideres una diferencia de formato como una discrepancia. Si una fecha en texto (ej. `Feb 11, 2023`) y una fecha numérica (ej. `02-11-2023`) representan el mismo día, mes y año, deben ser consideradas como una coincidencia.
+*   **Otros Formatos:** Verifica la consistencia en capitalización y ortografía solo si afecta la exactitud del dato.
 
-4. **Quality Control**:
-   - Flag suspicious or unusual values
-   - Identify potential OCR errors
-   - Check for logical inconsistencies
-   - Validate cross-field relationships
-
-**VALIDATION FOCUS AREAS**:
-- Critical identifiers (IDs, names, numbers)
-- Financial data (amounts, calculations)
-- Dates and temporal information
-- Contact and address details
-- Document-specific requirements
-
-**OUTPUT FORMAT**:
-Provide detailed validation results in JSON format:
+**FORMATO DE RESPUESTA:**
+Proporciona tu análisis en el siguiente formato JSON:
 
 {{
   ""validationSummary"": {{
@@ -140,7 +123,8 @@ Provide detailed validation results in JSON format:
   ""qualityScore"": ""overall quality rating (0.0 to 1.0)""
 }}
 
-Be thorough, precise, and provide actionable feedback for improving data extraction accuracy.";
+Sé exhaustivo, preciso y proporciona retroalimentación detallada para mejorar la precisión de la validación de datos.
+";
         }
 
         public string BuildDiscrepancyAnalysisPrompt(string documentType, List<string> discrepancies)

@@ -29,10 +29,10 @@ namespace DataValidator.API.Services
             _aiConfig = aiConfig.Value;
         }
 
-        public async Task<ValidationAnalysisResult> ValidateExtractedDataAsync(string extractedData, string documentType, List<string> fieldsToValidate)
+        public async Task<ValidationAnalysisResult> ValidateExtractedDataAsync(string extractedData, string documentType, List<string> fieldsToValidate, string jsonData)
         {
             var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-            var basePrompt = _promptBuilder.BuildValidationPrompt(documentType, fieldsToValidate);
+            var basePrompt = _promptBuilder.BuildValidationPrompt(documentType, fieldsToValidate, jsonData);
             var finalPrompt = BuildFinalValidationPrompt(extractedData, basePrompt);
 
             var primaryProvider = _analysisProviders.FirstOrDefault(p => p.ProviderName == _aiConfig.AnalysisModel.Provider);
@@ -42,6 +42,21 @@ namespace DataValidator.API.Services
             }
 
             var result = await primaryProvider.AnalyzeDataAsync(finalPrompt);
+
+            // If primary provider fails, try alternative providers
+            if (!result.Success)
+            {
+                var alternativeProviders = _analysisProviders.Where(p => p.ProviderName != _aiConfig.AnalysisModel.Provider);
+                foreach (var alternativeProvider in alternativeProviders)
+                {
+                    _logger.LogWarning("Primary provider failed, trying alternative provider: {Provider}", alternativeProvider.ProviderName);
+                    result = await alternativeProvider.AnalyzeDataAsync(finalPrompt);
+                    if (result.Success)
+                    {
+                        break;
+                    }
+                }
+            }
 
             if (result.Success)
             {
