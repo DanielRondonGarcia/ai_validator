@@ -4,11 +4,12 @@ using Microsoft.Extensions.Logging;
 using System.Threading.Tasks;
 using DataValidator.API.Services;
 using DataValidator.Domain.Services;
-using DataValidator.Domain.Ports;
-using DataValidator.Domain.Models;
+
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Extensions.Options;
+using AI.Library.Models;
+using AI.Library.Ports;
 
 namespace DataValidator.Tests
 {

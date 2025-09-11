@@ -4,7 +4,7 @@ using Microsoft.Extensions.Logging;
 using System.Threading.Tasks;
 using DataValidator.API.Controllers;
 using DataValidator.Domain.Services;
-using DataValidator.Domain.Models;
+
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using System.IO;
@@ -12,6 +12,7 @@ using System.Text;
 using System.Collections.Generic;
 using Microsoft.Extensions.Configuration;
 using DataValidator.API.Models; // <-- Added this using statement
+using AI.Library.Models;
 
 namespace DataValidator.Tests
 {
