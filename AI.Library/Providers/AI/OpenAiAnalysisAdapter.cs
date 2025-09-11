@@ -10,7 +10,10 @@ using System.Threading.Tasks;
 
 namespace AI.Library.Providers.AI
 {
-    public class OpenAiAnalysisAdapter : IAiAnalysisProvider
+    /// <summary>
+    /// Adaptador para el proveedor OpenAI que implementa servicios de análisis y visión
+    /// </summary>
+    public class OpenAiAnalysisAdapter : IAiAnalysisProvider, IAiVisionProvider
     {
         private readonly HttpClient _httpClient;
         private readonly ILogger<OpenAiAnalysisAdapter> _logger;
@@ -83,6 +86,104 @@ namespace AI.Library.Providers.AI
                     ErrorMessage = $"OpenAI API error: {response.StatusCode}",
                     ModelUsed = config.Model,
                     Provider = ProviderName
+                };
+            }
+        }
+
+        /// <summary>
+        /// Extrae datos de una imagen utilizando OpenAI Vision
+        /// </summary>
+        /// <param name="imageData">Datos binarios de la imagen</param>
+        /// <param name="mimeType">Tipo MIME de la imagen</param>
+        /// <param name="prompt">Prompt para guiar la extracción</param>
+        /// <returns>Resultado de la extracción</returns>
+        public async Task<VisionExtractionResult> ExtractDataFromImageAsync(byte[] imageData, string mimeType, string prompt)
+        {
+            var startTime = DateTime.UtcNow;
+            try
+            {
+                _logger.LogInformation("Iniciando extracción de datos de imagen con OpenAI Vision");
+
+                var base64Image = Convert.ToBase64String(imageData);
+                var config = _aiConfig.VisionModel ?? _aiConfig.AnalysisModel;
+
+                var requestBody = new
+                {
+                    model = config.Model,
+                    messages = new[]
+                    {
+                        new
+                        {
+                            role = "user",
+                            content = new object[]
+                            {
+                                new { type = "text", text = prompt },
+                                new 
+                                {
+                                    type = "image_url",
+                                    image_url = new
+                                    {
+                                        url = $"data:{mimeType};base64,{base64Image}"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    max_tokens = config.MaxTokens,
+                    temperature = config.Temperature
+                };
+
+                var json = JsonSerializer.Serialize(requestBody);
+                var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+                _httpClient.DefaultRequestHeaders.Clear();
+                _httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {config.ApiKey}");
+
+                var response = await _httpClient.PostAsync(config.BaseUrl, content);
+                var responseContent = await response.Content.ReadAsStringAsync();
+                var processingTime = (long)(DateTime.UtcNow - startTime).TotalMilliseconds;
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var jsonResponse = JsonDocument.Parse(responseContent);
+                    var extractedText = jsonResponse.RootElement
+                        .GetProperty("choices")[0]
+                        .GetProperty("message")
+                        .GetProperty("content")
+                        .GetString() ?? string.Empty;
+
+                    _logger.LogInformation("Extracción de imagen completada exitosamente");
+                    return new VisionExtractionResult
+                    {
+                        Success = true,
+                        ExtractedData = extractedText,
+                        Metadata = new Dictionary<string, object>
+                        {
+                            ["model"] = config.Model,
+                            ["provider"] = ProviderName,
+                            ["processingTimeMs"] = processingTime,
+                            ["imageSize"] = imageData.Length,
+                            ["mimeType"] = mimeType
+                        }
+                    };
+                }
+                else
+                {
+                    _logger.LogError("OpenAI Vision API error: {StatusCode} - {Response}", response.StatusCode, responseContent);
+                    return new VisionExtractionResult
+                    {
+                        Success = false,
+                        ErrorMessage = $"OpenAI Vision API error: {response.StatusCode}"
+                    };
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error durante la extracción de datos de imagen");
+                return new VisionExtractionResult
+                {
+                    Success = false,
+                    ErrorMessage = $"Error durante la extracción: {ex.Message}"
                 };
             }
         }

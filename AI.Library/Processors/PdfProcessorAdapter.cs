@@ -10,6 +10,9 @@ using UglyToad.PdfPig;
 
 namespace AI.Library.Processors
 {
+    /// <summary>
+    /// Procesador de archivos PDF que convierte páginas a imágenes
+    /// </summary>
     public class PdfProcessorAdapter : IPdfProcessor
     {
         private readonly ILogger<PdfProcessorAdapter> _logger;
@@ -20,6 +23,11 @@ namespace AI.Library.Processors
             IronPdf.Installation.LinuxAndDockerDependenciesAutoConfig = true;
         }
 
+        /// <summary>
+        /// Convierte todas las páginas de un PDF a imágenes PNG
+        /// </summary>
+        /// <param name="pdfData">Datos binarios del archivo PDF</param>
+        /// <returns>Lista de tuplas con los datos de imagen y número de página</returns>
         public async Task<List<(byte[] ImageData, int PageNumber)>> ConvertPdfPagesToImagesAsync(byte[] pdfData)
         {
             try
