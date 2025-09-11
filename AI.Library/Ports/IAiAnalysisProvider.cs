@@ -1,6 +1,6 @@
-using DataValidator.Domain.Models;
+using AI.Library.Models;
 
-namespace DataValidator.Domain.Ports
+namespace AI.Library.Ports
 {
     public interface IAiAnalysisProvider
     {

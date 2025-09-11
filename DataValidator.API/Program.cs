@@ -1,9 +1,9 @@
 using DataValidator.API.Services;
-using DataValidator.Domain.Models;
-using DataValidator.Domain.Ports;
+using AI.Library.Models;
+using AI.Library.Ports;
 using DataValidator.Domain.Services;
-using DataValidator.Infrastructure.Processors;
-using DataValidator.Infrastructure.Providers.AI;
+using AI.Library.Processors;
+using AI.Library.Providers.AI;
 using Microsoft.OpenApi.Models;
 using System.IO;
 using System.Reflection;

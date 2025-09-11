@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-namespace DataValidator.Domain.Ports
+namespace AI.Library.Ports
 {
     public interface IPdfProcessor
     {

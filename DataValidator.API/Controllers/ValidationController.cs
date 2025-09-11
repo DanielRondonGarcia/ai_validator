@@ -1,5 +1,5 @@
 using DataValidator.API.Models;
-using DataValidator.Domain.Models;
+using AI.Library.Models;
 using DataValidator.Domain.Services;
 using Microsoft.AspNetCore.Mvc;
 using System;

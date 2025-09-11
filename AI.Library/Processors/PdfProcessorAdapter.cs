@@ -1,13 +1,14 @@
-using DataValidator.Domain.Ports;
+using AI.Library.Ports;
 using IronPdf;
 using IronSoftware.Drawing;
 using Microsoft.Extensions.Logging;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using UglyToad.PdfPig;
 
-namespace DataValidator.Infrastructure.Processors
+namespace AI.Library.Processors
 {
     public class PdfProcessorAdapter : IPdfProcessor
     {

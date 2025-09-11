@@ -1,5 +1,5 @@
-using DataValidator.Domain.Models;
-using DataValidator.Domain.Ports;
+using AI.Library.Models;
+using AI.Library.Ports;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Net.Http;
@@ -7,7 +7,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 
-namespace DataValidator.Infrastructure.Providers.AI
+namespace AI.Library.Providers.AI
 {
     public class OpenAiVisionAdapter : IAiVisionProvider
     {

@@ -1,5 +1,5 @@
-using DataValidator.Domain.Models;
-using DataValidator.Domain.Ports;
+using AI.Library.Models;
+using AI.Library.Ports;
 using DataValidator.Domain.Services;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;

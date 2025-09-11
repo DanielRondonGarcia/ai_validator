@@ -1,4 +1,4 @@
-using DataValidator.Domain.Models;
+using AI.Library.Models;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 

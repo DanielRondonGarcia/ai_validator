@@ -1,4 +1,4 @@
-namespace DataValidator.Domain.Models
+namespace AI.Library.Models
 {
     public class VisionExtractionResult
     {

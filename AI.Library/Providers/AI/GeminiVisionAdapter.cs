@@ -1,5 +1,5 @@
-using DataValidator.Domain.Models;
-using DataValidator.Domain.Ports;
+using AI.Library.Models;
+using AI.Library.Ports;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Net.Http;
@@ -7,15 +7,15 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 
-namespace DataValidator.Infrastructure.Providers.AI
+namespace AI.Library.Providers.AI
 {
-    public class GeminiAnalysisAdapter : IAiAnalysisProvider
+    public class GeminiVisionAdapter : IAiVisionProvider
     {
         private readonly HttpClient _httpClient;
-        private readonly ILogger<GeminiAnalysisAdapter> _logger;
+        private readonly ILogger<GeminiVisionAdapter> _logger;
         private readonly AIModelsConfiguration _aiConfig;
 
-        public GeminiAnalysisAdapter(HttpClient httpClient, ILogger<GeminiAnalysisAdapter> logger, IOptions<AIModelsConfiguration> aiConfig)
+        public GeminiVisionAdapter(HttpClient httpClient, ILogger<GeminiVisionAdapter> logger, IOptions<AIModelsConfiguration> aiConfig)
         {
             _httpClient = httpClient;
             _logger = logger;
@@ -24,17 +24,27 @@ namespace DataValidator.Infrastructure.Providers.AI
 
         public string ProviderName => "Google";
 
-        public async Task<ValidationAnalysisResult> AnalyzeDataAsync(string prompt)
+        public async Task<VisionExtractionResult> ExtractDataFromImageAsync(byte[] imageData, string mimeType, string prompt)
         {
+            var base64Image = System.Convert.ToBase64String(imageData);
+
             var requestBody = new
             {
                 contents = new[]
                 {
                     new
                     {
-                        parts = new[]
+                        parts = new object[]
                         {
-                            new { text = prompt }
+                            new { text = prompt },
+                            new
+                            {
+                                inline_data = new
+                                {
+                                    mime_type = mimeType,
+                                    data = base64Image
+                                }
+                            }
                         }
                     }
                 }
@@ -44,7 +54,7 @@ namespace DataValidator.Infrastructure.Providers.AI
             var content = new StringContent(json, Encoding.UTF8, "application/json");
 
             // Get configuration from appsettings
-            var config = _aiConfig.AnalysisModel;
+            var config = _aiConfig.VisionModel;
             var model = config.Model;
             var apiKey = config.ApiKey;
             var baseUrl = config.BaseUrl;
@@ -56,24 +66,24 @@ namespace DataValidator.Infrastructure.Providers.AI
             if (response.IsSuccessStatusCode)
             {
                 var jsonResponse = JsonSerializer.Deserialize<JsonElement>(responseContent);
-                var analysisText = jsonResponse.GetProperty("candidates")[0].GetProperty("content").GetProperty("parts")[0].GetProperty("text").GetString() ?? "";
+                var extractedText = jsonResponse.GetProperty("candidates")[0].GetProperty("content").GetProperty("parts")[0].GetProperty("text").GetString() ?? "";
 
-                return new ValidationAnalysisResult
+                return new VisionExtractionResult
                 {
                     Success = true,
-                    Analysis = analysisText,
-                    ModelUsed = config.Model,
+                    ExtractedData = extractedText,
+                    ModelUsed = model,
                     Provider = ProviderName
                 };
             }
             else
             {
                 _logger.LogError("Gemini API error: {StatusCode} - {Response}", response.StatusCode, responseContent);
-                return new ValidationAnalysisResult
+                return new VisionExtractionResult
                 {
                     Success = false,
                     ErrorMessage = $"Gemini API error: {response.StatusCode}",
-                    ModelUsed = config.Model,
+                    ModelUsed = model,
                     Provider = ProviderName
                 };
             }

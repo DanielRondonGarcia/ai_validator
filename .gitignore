@@ -392,3 +392,6 @@ Thumbs.db
 DataValidator.API/DataValidator.API.csproj.user
 *.user
 DataValidator.API/DataValidator.API.csproj.user
+
+# .NET Core SDK
+.dotnet/
