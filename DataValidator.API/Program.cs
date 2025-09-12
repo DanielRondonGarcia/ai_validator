@@ -36,13 +36,11 @@ builder.Services.AddScoped<IPdfProcessor, PdfProcessorAdapter>();
 // The VisionExtractionService will receive an IEnumerable<IAiVisionProvider>
 // and select the appropriate one based on configuration.
 builder.Services.AddScoped<IAiVisionProvider, OpenAiVisionAdapter>();
-builder.Services.AddScoped<IAiVisionProvider, GeminiVisionAdapter>();
 
 // Register all available AI Analysis Providers.
 // The AnalysisValidationService will receive an IEnumerable<IAiAnalysisProvider>
 // and select the appropriate one based on configuration.
 builder.Services.AddScoped<IAiAnalysisProvider, OpenAiAnalysisAdapter>();
-builder.Services.AddScoped<IAiAnalysisProvider, GeminiAnalysisAdapter>();
 
 
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle

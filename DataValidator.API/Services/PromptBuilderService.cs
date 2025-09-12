@@ -100,27 +100,19 @@ Ensure these priority fields are extracted with maximum accuracy and detail.";
 Proporciona tu análisis en el siguiente formato JSON:
 
 {{
-  ""validationSummary"": {{
-    ""overallAccuracy"": ""percentage or score"",
-    ""criticalIssues"": ""number"",
-    ""minorIssues"": ""number"",
-    ""validatedFields"": ""number""
-  }},
-  ""fieldValidation"": [
+  ""isValid"": boolean,
+  ""confidenceScore"": number (0.0 to 1.0),
+  ""analysis"": ""detailed analysis text explaining the validation results"",
+  ""discrepancies"": [
     {{
-      ""fieldName"": ""name of field"",
-      ""status"": ""valid|invalid|warning|missing"",
-      ""extractedValue"": ""what was extracted"",
-      ""expectedValue"": ""what should be (if different)"",
-      ""issue"": ""description of problem if any"",
-      ""severity"": ""critical|moderate|minor"",
-      ""confidence"": ""high|medium|low""
+      ""field"": ""field name"",
+      ""extractedValue"": ""value from document"",
+      ""providedValue"": ""value from JSON"",
+      ""discrepancyType"": ""mismatch|missing|format|other"",
+      ""description"": ""detailed description"",
+      ""severity"": number (0.0 to 1.0)
     }}
-  ],
-  ""recommendations"": [
-    ""specific suggestions for improvement""
-  ],
-  ""qualityScore"": ""overall quality rating (0.0 to 1.0)""
+  ]
 }}
 
 Sé exhaustivo, preciso y proporciona retroalimentación detallada para mejorar la precisión de la validación de datos.
