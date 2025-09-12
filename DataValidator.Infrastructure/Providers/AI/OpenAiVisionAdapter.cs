@@ -29,7 +29,36 @@ namespace DataValidator.Infrastructure.Providers.AI
             // Get configuration from appsettings
             var config = _aiConfig.VisionModel;
             
+            _logger.LogInformation("Processing image data - Size: {ImageSize} bytes, MIME Type: {MimeType}", imageData.Length, mimeType);
+            
+            // Validate image data
+            if (imageData == null || imageData.Length == 0)
+            {
+                _logger.LogError("Invalid image data: null or empty");
+                return new VisionExtractionResult
+                {
+                    Success = false,
+                    ErrorMessage = "Invalid image data: null or empty",
+                    ModelUsed = config.Model,
+                    Provider = ProviderName
+                };
+            }
+            
+            // Validate MIME type
+            if (string.IsNullOrEmpty(mimeType) || !mimeType.StartsWith("image/"))
+            {
+                _logger.LogError("Invalid MIME type: {MimeType}. Expected image/* format", mimeType);
+                return new VisionExtractionResult
+                {
+                    Success = false,
+                    ErrorMessage = $"Invalid MIME type: {mimeType}. Expected image/* format",
+                    ModelUsed = config.Model,
+                    Provider = ProviderName
+                };
+            }
+            
             var base64Image = System.Convert.ToBase64String(imageData);
+            _logger.LogInformation("Base64 image length: {Base64Length} characters", base64Image.Length);
 
             var requestBody = new
             {
@@ -70,6 +99,9 @@ namespace DataValidator.Infrastructure.Providers.AI
             {
                 var jsonResponse = JsonSerializer.Deserialize<JsonElement>(responseContent);
                 var extractedText = jsonResponse.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString() ?? "";
+                
+                _logger.LogInformation("OpenAI Vision response received. Content length: {ContentLength}", extractedText.Length);
+                _logger.LogInformation("OpenAI Vision extracted content: {ExtractedContent}", extractedText);
 
                 return new VisionExtractionResult
                 {

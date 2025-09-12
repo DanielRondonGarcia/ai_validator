@@ -11,10 +11,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="IronPdf" Version="2025.9.4" />
     <PackageReference Include="Google_GenerativeAI" Version="2.0.11" />
     <PackageReference Include="OpenAI" Version="2.1.0" />
     <PackageReference Include="UglyToad.PdfPig" Version="1.7.0-custom-5" />
+    <PackageReference Include="PdfPig.Rendering.Skia" Version="0.1.11.3" />
+    <PackageReference Include="SkiaSharp" Version="2.88.9" />
   </ItemGroup>
 
 </Project>

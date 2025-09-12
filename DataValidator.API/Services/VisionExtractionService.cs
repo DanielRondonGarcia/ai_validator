@@ -39,6 +39,7 @@ namespace DataValidator.API.Services
 
             var extractionPrompt = _promptBuilder.BuildExtractionPrompt(documentType, fieldsToExtract);
             var mimeType = GetMimeTypeFromFileName(fileName);
+            _logger.LogInformation("Detected MIME type for file {FileName}: {MimeType}", fileName, mimeType);
 
             var primaryProvider = _visionProviders.FirstOrDefault(p => p.ProviderName == _aiConfig.VisionModel.Provider);
             if (primaryProvider == null)
@@ -68,7 +69,8 @@ namespace DataValidator.API.Services
 
                 foreach (var (imageData, pageNumber) in images)
                 {
-                    var pageResult = await ExtractDataFromImageAsync(imageData, $"{fileName}_page_{pageNumber}.png", documentType, fieldsToExtract);
+                    var pngFileName = $"{Path.GetFileNameWithoutExtension(fileName)}_page_{pageNumber}.png";
+                    var pageResult = await ExtractDataFromImageAsync(imageData, pngFileName, documentType, fieldsToExtract);
                     if (pageResult.Success)
                     {
                         allExtractedData.Add($"// Page {pageNumber}\n{pageResult.ExtractedData}");

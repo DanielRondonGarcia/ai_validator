@@ -59,13 +59,20 @@ namespace DataValidator.API.Controllers
                 return BadRequest("JSON data is not provided.");
             }
 
-            var supportedTypes = new[] { "application/pdf", "image/jpeg", "image/jpg", "image/png", "image/gif", "image/bmp", "image/webp" };
-            if (!supportedTypes.Contains(request.File.ContentType.ToLower()))
+            var supportedTypes = new[] { "application/pdf", "image/jpeg", "image/jpg", "image/png", "image/gif", "image/bmp", "image/webp", "application/octet-stream" };
+            var fileExtension = Path.GetExtension(request.File.FileName).ToLowerInvariant();
+            var supportedExtensions = new[] { ".pdf", ".jpeg", ".jpg", ".png", ".gif", ".bmp", ".webp" };
+            
+            if (!supportedTypes.Contains(request.File.ContentType.ToLower()) && !supportedExtensions.Contains(fileExtension))
             {
-                return BadRequest($"Invalid file type: {request.File.ContentType}.");
+                return BadRequest($"Invalid file type: {request.File.ContentType} with extension {fileExtension}.");
             }
 
-            var isPdf = request.File.ContentType == "application/pdf";
+            var isPdf = request.File.ContentType == "application/pdf" || 
+                       Path.GetExtension(request.File.FileName).ToLowerInvariant() == ".pdf";
+            
+            _logger.LogInformation("[{RequestId}] File ContentType: {ContentType}, FileName: {FileName}, Detected as PDF: {IsPdf}", 
+                requestId, request.File.ContentType, request.File.FileName, isPdf);
 
             try
             {
